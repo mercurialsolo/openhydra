@@ -1,0 +1,6 @@
+id: eng_harness
+name: Engineering Harness
+version: "1.0.0"
+tags: [engineering, harness, long-running, sessions]
+priority: 0  # core skill
+token_estimate: 1200

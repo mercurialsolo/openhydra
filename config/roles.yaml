@@ -1,0 +1,146 @@
+roles:
+  planner:
+    name: "Planner"
+    description: "Analyzes tasks and composes multi-step execution plans"
+    model: claude-sonnet-4-5-20250929
+    skill_packs: []
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+      - WebSearch
+    budget:
+      max_tokens: 30000
+      max_tool_calls: 20
+      max_duration_minutes: 5
+    context_budget:
+      skills_pct: 10
+      memory_pct: 20
+      reasoning_pct: 70
+
+  pm.prd:
+    name: "Product Manager - PRD Writer"
+    description: "Writes product requirements documents from task descriptions"
+    model: claude-sonnet-4-5-20250929
+    skill_packs:
+      - coding_principles
+    allowed_tools:
+      - Read
+      - Write
+      - Glob
+      - Grep
+      - WebSearch
+      - WebFetch
+    output_schema: prd_output
+    budget:
+      max_tokens: 50000
+      max_tool_calls: 100
+      max_duration_minutes: 15
+    context_budget:
+      skills_pct: 35
+      memory_pct: 10
+      reasoning_pct: 55
+    gates:
+      - type: quality
+        threshold: 24
+
+  eng.init:
+    name: "Engineer - Initialization"
+    description: "Sets up project scaffolding and implementation plan"
+    model: claude-sonnet-4-5-20250929
+    skill_packs:
+      - eng_harness
+      - coding_principles
+    allowed_tools:
+      - Read
+      - Write
+      - Glob
+      - Grep
+      - Bash
+    output_schema: eng_output
+    budget:
+      max_tokens: 80000
+      max_tool_calls: 200
+      max_duration_minutes: 20
+    context_budget:
+      skills_pct: 30
+      memory_pct: 10
+      reasoning_pct: 60
+    gates:
+      - type: quality
+        threshold: 24
+
+  eng.implement:
+    name: "Engineer - Implementation"
+    description: "Implements features based on plans and specs"
+    model: claude-sonnet-4-5-20250929
+    skill_packs:
+      - eng_harness
+      - coding_principles
+    allowed_tools:
+      - Read
+      - Write
+      - Edit
+      - Glob
+      - Grep
+      - Bash
+    output_schema: eng_output
+    budget:
+      max_tokens: 200000
+      max_tool_calls: 500
+      max_duration_minutes: 60
+    context_budget:
+      skills_pct: 30
+      memory_pct: 8
+      reasoning_pct: 62
+    gates:
+      - type: quality
+        threshold: 28
+      - type: tests_pass
+
+  test.code:
+    name: "Tester - Code Quality"
+    description: "Reviews and tests code for correctness and quality"
+    model: claude-sonnet-4-5-20250929
+    skill_packs:
+      - coding_principles
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+      - Bash
+    output_schema: test_output
+    budget:
+      max_tokens: 100000
+      max_tool_calls: 200
+      max_duration_minutes: 30
+    context_budget:
+      skills_pct: 25
+      memory_pct: 10
+      reasoning_pct: 65
+    gates:
+      - type: quality
+        threshold: 24
+
+  pm.review:
+    name: "Product Manager - Review"
+    description: "Reviews outputs for product quality and completeness"
+    model: claude-sonnet-4-5-20250929
+    skill_packs:
+      - coding_principles
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+    output_schema: review_output
+    budget:
+      max_tokens: 50000
+      max_tool_calls: 50
+      max_duration_minutes: 15
+    context_budget:
+      skills_pct: 30
+      memory_pct: 15
+      reasoning_pct: 55
+    gates:
+      - type: quality
+        threshold: 28

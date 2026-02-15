@@ -1,0 +1,6 @@
+id: coding_principles
+name: Coding Principles
+version: "1.0.0"
+tags: [engineering, code-quality, testing]
+priority: 0  # core skill
+token_estimate: 800
