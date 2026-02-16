@@ -18,6 +18,30 @@ from ..agents.base import ToolDefinition
 # Maximum output size to prevent OOM on huge files/commands
 MAX_OUTPUT_CHARS = 30_000
 
+# Environment variables stripped from child processes to prevent secret leaks
+_SENSITIVE_ENV_KEYS = {
+    "CLAUDECODE",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "OPENHYDRA_WEB_API_KEY",
+    "OPENHYDRA_SLACK_BOT_TOKEN",
+    "OPENHYDRA_SLACK_APP_TOKEN",
+    "OPENHYDRA_DISCORD_BOT_TOKEN",
+    "OPENHYDRA_WHATSAPP_ACCESS_TOKEN",
+    "TAVILY_API_KEY",
+    "PERPLEXITY_API_KEY",
+}
+
+# Shell patterns that are destructive or dangerous
+_DANGEROUS_PATTERNS = [
+    re.compile(r"\brm\s+-rf\s+/"),
+    re.compile(r"\bmkfs\b"),
+    re.compile(r"\bdd\s+.*of=/dev/"),
+    re.compile(r"\bcurl\b.*\|\s*sh\b"),
+    re.compile(r"\bwget\b.*\|\s*sh\b"),
+]
+
 
 def get_filesystem_tool_definitions() -> list[ToolDefinition]:
     """Return ToolDefinition list for filesystem tools."""
@@ -157,16 +181,48 @@ class FilesystemToolRouter:
     """Executes filesystem tools (Read, Write, Edit, Bash, Glob, Grep).
 
     Constructed with a working directory for safety.
+    When ``restrict_to_cwd`` is True, all file operations are confined
+    to the working directory tree (path traversal prevention).
     """
 
-    def __init__(self, cwd: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        cwd: str | Path | None = None,
+        restrict_to_cwd: bool = False,
+    ) -> None:
         self._cwd = Path(cwd) if cwd else Path.cwd()
+        self._restrict_to_cwd = restrict_to_cwd
         self._tool_names = {
             "Read", "Write", "Edit", "Bash", "Glob", "Grep",
         }
 
     def has_tool(self, name: str) -> bool:
         return name in self._tool_names
+
+    def _validate_path(self, path: Path) -> str | None:
+        """Return error string if path escapes cwd, else None."""
+        if not self._restrict_to_cwd:
+            return None
+        try:
+            resolved = path.resolve()
+            cwd_resolved = self._cwd.resolve()
+            if not (resolved == cwd_resolved
+                    or str(resolved).startswith(str(cwd_resolved) + os.sep)):
+                return (
+                    f"Error: path '{path}' is outside the allowed "
+                    f"directory '{cwd_resolved}'"
+                )
+        except (OSError, ValueError) as e:
+            return f"Error: invalid path: {e}"
+        return None
+
+    @staticmethod
+    def _safe_env() -> dict[str, str]:
+        """Build child environment with sensitive keys stripped."""
+        return {
+            k: v for k, v in os.environ.items()
+            if k not in _SENSITIVE_ENV_KEYS
+        }
 
     def get_definitions(self) -> list[ToolDefinition]:
         return get_filesystem_tool_definitions()
@@ -195,6 +251,9 @@ class FilesystemToolRouter:
         if not path.is_absolute():
             path = self._cwd / path
 
+        if err := self._validate_path(path):
+            return err
+
         if not path.exists():
             return f"Error: File not found: {path}"
 
@@ -219,6 +278,9 @@ class FilesystemToolRouter:
         if not path.is_absolute():
             path = self._cwd / path
 
+        if err := self._validate_path(path):
+            return err
+
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
@@ -234,6 +296,9 @@ class FilesystemToolRouter:
         path = Path(file_path)
         if not path.is_absolute():
             path = self._cwd / path
+
+        if err := self._validate_path(path):
+            return err
 
         if not path.exists():
             return f"Error: File not found: {path}"
@@ -258,11 +323,13 @@ class FilesystemToolRouter:
         command = args.get("command", "")
         timeout = args.get("timeout", 120)
 
+        # Block dangerous commands
+        for pattern in _DANGEROUS_PATTERNS:
+            if pattern.search(command):
+                return f"Error: command blocked by safety filter: {command}"
+
         try:
-            child_env = {
-                k: v for k, v in os.environ.items()
-                if k != "CLAUDECODE"
-            }
+            child_env = self._safe_env()
             proc = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
@@ -296,6 +363,9 @@ class FilesystemToolRouter:
         if not search_dir.is_absolute():
             search_dir = self._cwd / search_dir
 
+        if err := self._validate_path(search_dir):
+            return err
+
         try:
             matches = sorted(
                 search_dir.glob(pattern),
@@ -317,6 +387,9 @@ class FilesystemToolRouter:
         search_path = Path(path)
         if not search_path.is_absolute():
             search_path = self._cwd / search_path
+
+        if err := self._validate_path(search_path):
+            return err
 
         try:
             regex = re.compile(pattern)

@@ -277,7 +277,9 @@ class Engine:
         """Set up filesystem tools (Read, Write, Bash, etc.) for API providers."""
         from .tools.filesystem import FilesystemToolRouter
 
-        router = FilesystemToolRouter(cwd=self.config.engine.state_dir)
+        router = FilesystemToolRouter(
+            cwd=self.config.engine.state_dir, restrict_to_cwd=True,
+        )
         self.tool_executor.set_filesystem_router(router)
 
     async def _init_mcp_clients(self) -> None:
