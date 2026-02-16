@@ -219,6 +219,7 @@ def serve(
 ) -> None:
     """Start the engine with all enabled channels (web, Slack, Discord, WhatsApp)."""
     import signal
+    import sys
 
     async def _serve():
         from openhydra.channels.registry import ChannelRegistry
@@ -237,9 +238,14 @@ def serve(
         def _handle_signal(*_):
             stop_event.set()
 
-        loop = asyncio.get_event_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, _handle_signal)
+        if sys.platform != "win32":
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(sig, _handle_signal)
+        else:
+            # Windows: add_signal_handler is not supported; fall back to signal.signal
+            signal.signal(signal.SIGINT, _handle_signal)
+            signal.signal(signal.SIGBREAK, _handle_signal)
 
         try:
             await registry.start_all()
