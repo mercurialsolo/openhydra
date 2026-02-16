@@ -51,6 +51,12 @@ class CodexCliProvider:
         model = model or self._default_model
         start = time.monotonic()
 
+        if tools is not None and len(tools) < 50:
+            logger.warning(
+                "Codex CLI does not support tool restrictions; "
+                "%d allowed tools will not be enforced", len(tools),
+            )
+
         # Build the full prompt with system context
         full_prompt = instructions
         if system_prompt:

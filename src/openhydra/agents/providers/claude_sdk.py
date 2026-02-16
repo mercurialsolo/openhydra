@@ -67,9 +67,9 @@ class ClaudeSdkProvider:
             "--dangerously-skip-permissions",
         ]
 
-        if tools:
+        if tools is not None:
             allowed = [t.name for t in tools]
-            cmd.extend(["--allowedTools", ",".join(allowed)])
+            cmd.extend(["--allowedTools", ",".join(allowed) if allowed else ""])
 
         # Write MCP config to temp file if provided
         mcp_config_path = None

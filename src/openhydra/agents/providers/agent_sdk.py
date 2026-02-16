@@ -103,7 +103,7 @@ class AgentSdkProvider:
             permission_mode="bypassPermissions",
         )
 
-        if tools:
+        if tools is not None:
             options.allowed_tools = [t.name for t in tools]
 
         mcp_servers = self._build_mcp_servers()

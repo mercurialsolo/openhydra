@@ -56,6 +56,9 @@ class AnthropicApiProvider:
         start = time.monotonic()
 
         api_tools = self._convert_tools(tools) if tools else []
+        allowed_tool_names: set[str] | None = (
+            {t.name for t in tools} if tools is not None else None
+        )
         messages: list[dict[str, Any]] = [{"role": "user", "content": instructions}]
 
         total_input_tokens = 0
@@ -91,6 +94,18 @@ class AnthropicApiProvider:
             messages.append({"role": "assistant", "content": response.content})
             tool_results = []
             for tool_block in tool_use_blocks:
+                # Reject tool calls not in the allowed set
+                if (
+                    allowed_tool_names is not None
+                    and tool_block.name not in allowed_tool_names
+                ):
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_block.id,
+                        "content": f"Error: tool '{tool_block.name}' is not allowed",
+                        "is_error": True,
+                    })
+                    continue
                 try:
                     result = await self._tool_executor(tool_block.name, tool_block.input)
                     tool_results.append({

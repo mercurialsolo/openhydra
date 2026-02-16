@@ -39,7 +39,7 @@ class RoleDefinition:
     provider: str = ""  # empty = use default
     model: str | None = None
     skill_packs: list[str] = field(default_factory=list)
-    allowed_tools: list[str] = field(default_factory=list)
+    allowed_tools: list[str] | None = None  # None = all tools, [] = no tools
     output_schema: str | None = None  # references schemas/<name>.json
     budget: BudgetConfig = field(default_factory=BudgetConfig)
     context_budget: ContextBudgetConfig = field(default_factory=ContextBudgetConfig)
@@ -76,7 +76,7 @@ class RoleCatalog:
                 provider=role_raw.get("provider", ""),
                 model=role_raw.get("model"),
                 skill_packs=role_raw.get("skill_packs", []),
-                allowed_tools=role_raw.get("allowed_tools", []),
+                allowed_tools=role_raw.get("allowed_tools"),
                 output_schema=role_raw.get("output_schema"),
                 budget=BudgetConfig(
                     max_tokens=budget_raw.get("max_tokens", 100_000),

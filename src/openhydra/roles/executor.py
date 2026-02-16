@@ -94,7 +94,7 @@ class RoleExecutor:
         result = await provider.run_session(
             instructions=instructions,
             system_prompt=system_prompt,
-            tools=tools if tools else None,
+            tools=tools,
             model=role.model,
             max_tokens=role.budget.max_tokens,
         )
@@ -310,15 +310,26 @@ class RoleExecutor:
 
         return "\n\n".join(sections)
 
-    def _prepare_tools(self, role: RoleDefinition) -> list[ToolDefinition]:
-        """Prepare tool list filtered by role's allowed_tools."""
+    def _prepare_tools(self, role: RoleDefinition) -> list[ToolDefinition] | None:
+        """Prepare tool list filtered by role's allowed_tools.
+
+        Returns:
+            None  — when allowed_tools is None (unrestricted, provider decides)
+            []    — when allowed_tools is [] (deny all tools)
+            [tools] — filtered list matching allowed_tools names
+        """
         if not self._tool_executor:
             return []
 
-        all_tools = self._tool_executor.list_all_tools()
-        if not role.allowed_tools:
-            return all_tools
+        # None = unrestricted (role doesn't specify restrictions)
+        if role.allowed_tools is None:
+            return None
 
+        # Empty list = deny all tools
+        if not role.allowed_tools:
+            return []
+
+        all_tools = self._tool_executor.list_all_tools()
         allowed = set(role.allowed_tools)
         return [t for t in all_tools if t.name in allowed]
 
