@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -318,3 +322,32 @@ def load_config(config_path: Path | None = None) -> OpenHydraConfig:
         config.memory.sqlite_path = config.engine.state_dir / "memory.db"
 
     return config
+
+
+def ensure_api_key(config: OpenHydraConfig) -> None:
+    """Generate and persist an API key if none is configured.
+
+    Only triggers when ``web.api_key`` is empty and the
+    ``OPENHYDRA_WEB_API_KEY`` env var is not set.  The generated key
+    is written back to ``~/.openhydra/openhydra.yaml`` so it survives
+    restarts.
+    """
+    if config.web.api_key:
+        return  # already set via env or config file
+
+    key = secrets.token_hex(16)
+    config.web.api_key = key
+
+    # Persist to user config
+    user_config_path = Path.home() / ".openhydra" / "openhydra.yaml"
+    existing: dict = {}
+    if user_config_path.exists():
+        with open(user_config_path) as f:
+            existing = yaml.safe_load(f) or {}
+
+    existing.setdefault("web", {})["api_key"] = key
+    user_config_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(user_config_path, "w") as f:
+        yaml.safe_dump(existing, f, default_flow_style=False)
+
+    logger.info("Generated API key: %s", key)

@@ -26,7 +26,7 @@ class WebChannel:
     def __init__(self, engine: Engine, config: WebConfig) -> None:
         self._engine = engine
         self._config = config
-        self._ws_manager = WebSocketManager(engine.events)
+        self._ws_manager = WebSocketManager(engine.events, api_key=config.api_key)
         self._server_task: asyncio.Task | None = None
         self._app: Starlette | None = None
 

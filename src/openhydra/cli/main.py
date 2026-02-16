@@ -223,11 +223,12 @@ def serve(
 
     async def _serve():
         from openhydra.channels.registry import ChannelRegistry
-        from openhydra.config import load_config
+        from openhydra.config import ensure_api_key, load_config
 
         cfg = load_config()
         cfg.web.host = host
         cfg.web.port = port
+        ensure_api_key(cfg)
 
         engine = await _create_engine()
         registry = ChannelRegistry(engine, cfg)

@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 class WebSocketManager:
     """Manages WebSocket connections and broadcasts engine events."""
 
-    def __init__(self, events: EventBus) -> None:
+    def __init__(self, events: EventBus, api_key: str = "") -> None:
         self._events = events
+        self._api_key = api_key
         self._connections: list[WebSocket] = []
         self._subscriptions: dict[int, str | None] = {}  # id(ws) → workflow_id or None (all)
         self._handler = self._on_event  # store bound ref for identity comparison
@@ -35,6 +36,13 @@ class WebSocketManager:
 
     async def handle(self, websocket: WebSocket) -> None:
         """Handle a single WebSocket connection lifecycle."""
+        # Authenticate if API key is configured
+        if self._api_key:
+            provided = websocket.query_params.get("api_key", "")
+            if provided != self._api_key:
+                await websocket.close(code=4001, reason="Invalid API key")
+                return
+
         await websocket.accept()
         self._connections.append(websocket)
         ws_id = id(websocket)
