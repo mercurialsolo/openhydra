@@ -16,6 +16,11 @@ venv/
 *.db-journal
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite3
+
+# Playwright MCP
+.playwright-mcp/
 
 # IDE
 .idea/

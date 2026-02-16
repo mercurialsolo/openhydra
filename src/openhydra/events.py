@@ -33,6 +33,9 @@ APPROVAL_REQUESTED = "approval.requested"
 APPROVAL_RESOLVED = "approval.resolved"
 MEMORY_STORED = "memory.stored"
 COST_UPDATED = "cost.updated"
+ARTIFACT_CREATED = "artifact.created"
+ARTIFACT_MODIFIED = "artifact.modified"
+MESSAGE_SENT = "message.sent"
 
 EventHandler = Callable[[Event], Coroutine[Any, Any, None]]
 

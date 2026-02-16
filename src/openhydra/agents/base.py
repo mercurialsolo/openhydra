@@ -14,6 +14,8 @@ class ToolDefinition:
     name: str
     description: str
     input_schema: dict[str, Any] | None = None
+    source: str = "builtin"  # "builtin" | "mcp"
+    mcp_server: str | None = None
 
 
 @dataclass

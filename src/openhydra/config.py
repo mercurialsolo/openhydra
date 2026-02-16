@@ -25,7 +25,7 @@ class ProviderConfig:
 
 @dataclass
 class AgentsConfig:
-    default_provider: str = "anthropic-api"
+    default_provider: str = "claude-sdk"
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
 
 
@@ -55,6 +55,69 @@ class WebConfig:
     enabled: bool = True
     host: str = "127.0.0.1"
     port: int = 7070
+    api_key: str = ""
+
+
+@dataclass
+class SlackConfig:
+    enabled: bool = False
+    bot_token: str = ""   # xoxb-...  (env: OPENHYDRA_SLACK_BOT_TOKEN)
+    app_token: str = ""   # xapp-...  (env: OPENHYDRA_SLACK_APP_TOKEN)
+    allowed_users: list[str] = field(default_factory=list)  # empty = allow all
+
+
+@dataclass
+class DiscordConfig:
+    enabled: bool = False
+    bot_token: str = ""   # env: OPENHYDRA_DISCORD_BOT_TOKEN
+    allowed_users: list[str] = field(default_factory=list)  # empty = allow all
+
+
+@dataclass
+class WhatsAppConfig:
+    enabled: bool = False
+    backend: str = "baileys"         # "baileys" | "cloud-api"
+    node_path: str = "node"
+    auth_dir: str = ""               # default: state_dir/whatsapp_auth
+    # Legacy cloud API fields (kept for backward compat)
+    access_token: str = ""           # env: OPENHYDRA_WHATSAPP_ACCESS_TOKEN
+    phone_number_id: str = ""
+    verify_token: str = ""           # webhook verification
+    allowed_phones: list[str] = field(default_factory=list)  # empty = allow all
+
+
+@dataclass
+class HeartbeatConfig:
+    enabled: bool = False
+    interval_seconds: float = 300.0     # 5 min default
+    quiet_hours_start: int | None = None  # 0-23
+    quiet_hours_end: int | None = None
+
+
+@dataclass
+class ChannelsConfig:
+    slack: SlackConfig = field(default_factory=SlackConfig)
+    discord: DiscordConfig = field(default_factory=DiscordConfig)
+    whatsapp: WhatsAppConfig = field(default_factory=WhatsAppConfig)
+    debounce_delay_ms: int = 1500
+    debounce_max_wait_ms: int = 5000
+    approval_timeout_seconds: float = 120.0
+    approval_timeout_action: str = "reject"  # reject | approve | ignore
+
+
+@dataclass
+class McpServerConfig:
+    name: str = ""
+    transport: str = "stdio"  # "stdio" | "sse"
+    command: str | None = None
+    args: list[str] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+    url: str | None = None
+
+
+@dataclass
+class ToolsConfig:
+    mcp_servers: list[McpServerConfig] = field(default_factory=list)
 
 
 @dataclass
@@ -63,7 +126,10 @@ class OpenHydraConfig:
     agents: AgentsConfig = field(default_factory=AgentsConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     skills: SkillsConfig = field(default_factory=SkillsConfig)
+    tools: ToolsConfig = field(default_factory=ToolsConfig)
     web: WebConfig = field(default_factory=WebConfig)
+    channels: ChannelsConfig = field(default_factory=ChannelsConfig)
+    heartbeat: HeartbeatConfig = field(default_factory=HeartbeatConfig)
 
 
 def _resolve_env_vars(value: str) -> str:
@@ -154,6 +220,94 @@ def load_config(config_path: Path | None = None) -> OpenHydraConfig:
                 url=src_raw.get("url"),
                 branch=src_raw.get("branch", "main"),
             ))
+
+    # Parse MCP server configs
+    if "tools" in raw and "mcp_servers" in raw["tools"]:
+        for srv_raw in raw["tools"]["mcp_servers"]:
+            config.tools.mcp_servers.append(McpServerConfig(
+                name=srv_raw.get("name", ""),
+                transport=srv_raw.get("transport", "stdio"),
+                command=srv_raw.get("command"),
+                args=srv_raw.get("args", []),
+                env=srv_raw.get("env", {}),
+                url=srv_raw.get("url"),
+            ))
+
+    # Parse web config
+    if "web" in raw:
+        web_raw = raw["web"]
+        if "enabled" in web_raw:
+            config.web.enabled = web_raw["enabled"]
+        if "host" in web_raw:
+            config.web.host = web_raw["host"]
+        if "api_key" in web_raw:
+            config.web.api_key = _resolve_env_vars(web_raw["api_key"])
+
+    if api_key := os.environ.get("OPENHYDRA_WEB_API_KEY"):
+        config.web.api_key = api_key
+
+    # Parse channels config
+    if "channels" in raw:
+        ch_raw = raw["channels"]
+
+        if "slack" in ch_raw:
+            s = ch_raw["slack"]
+            config.channels.slack = SlackConfig(
+                enabled=s.get("enabled", False),
+                bot_token=_resolve_env_vars(s.get("bot_token", "")),
+                app_token=_resolve_env_vars(s.get("app_token", "")),
+                allowed_users=s.get("allowed_users", []),
+            )
+
+        if "discord" in ch_raw:
+            d = ch_raw["discord"]
+            config.channels.discord = DiscordConfig(
+                enabled=d.get("enabled", False),
+                bot_token=_resolve_env_vars(d.get("bot_token", "")),
+                allowed_users=d.get("allowed_users", []),
+            )
+
+        if "whatsapp" in ch_raw:
+            w = ch_raw["whatsapp"]
+            config.channels.whatsapp = WhatsAppConfig(
+                enabled=w.get("enabled", False),
+                backend=w.get("backend", "baileys"),
+                node_path=w.get("node_path", "node"),
+                auth_dir=w.get("auth_dir", ""),
+                access_token=_resolve_env_vars(w.get("access_token", "")),
+                phone_number_id=w.get("phone_number_id", ""),
+                verify_token=_resolve_env_vars(w.get("verify_token", "")),
+                allowed_phones=w.get("allowed_phones", []),
+            )
+
+        if "debounce_delay_ms" in ch_raw:
+            config.channels.debounce_delay_ms = ch_raw["debounce_delay_ms"]
+        if "debounce_max_wait_ms" in ch_raw:
+            config.channels.debounce_max_wait_ms = ch_raw["debounce_max_wait_ms"]
+        if "approval_timeout_seconds" in ch_raw:
+            config.channels.approval_timeout_seconds = ch_raw["approval_timeout_seconds"]
+        if "approval_timeout_action" in ch_raw:
+            config.channels.approval_timeout_action = ch_raw["approval_timeout_action"]
+
+    # Parse heartbeat config
+    if "heartbeat" in raw:
+        hb = raw["heartbeat"]
+        config.heartbeat = HeartbeatConfig(
+            enabled=hb.get("enabled", False),
+            interval_seconds=hb.get("interval_seconds", 300.0),
+            quiet_hours_start=hb.get("quiet_hours_start"),
+            quiet_hours_end=hb.get("quiet_hours_end"),
+        )
+
+    # Environment variable overrides for channel tokens
+    if slack_bot := os.environ.get("OPENHYDRA_SLACK_BOT_TOKEN"):
+        config.channels.slack.bot_token = slack_bot
+    if slack_app := os.environ.get("OPENHYDRA_SLACK_APP_TOKEN"):
+        config.channels.slack.app_token = slack_app
+    if discord_token := os.environ.get("OPENHYDRA_DISCORD_BOT_TOKEN"):
+        config.channels.discord.bot_token = discord_token
+    if wa_token := os.environ.get("OPENHYDRA_WHATSAPP_ACCESS_TOKEN"):
+        config.channels.whatsapp.access_token = wa_token
 
     # Default skill source: ./skills if no sources configured
     if not config.skills.sources:

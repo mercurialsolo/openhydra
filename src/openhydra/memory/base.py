@@ -67,3 +67,16 @@ class MemoryStore(Protocol):
     async def list_collections(self) -> list[str]:
         """List all known collections."""
         ...
+
+    async def count(self, collection: str) -> int:
+        """Count entries in a collection."""
+        ...
+
+    async def list_entries(
+        self,
+        collection: str,
+        limit: int = 100,
+        oldest_first: bool = True,
+    ) -> list[MemoryEntry]:
+        """List entries in a collection, ordered by created_at."""
+        ...

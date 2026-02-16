@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS steps (
     cost_usd REAL DEFAULT 0.0,
     tokens_used INTEGER DEFAULT 0,
     error TEXT,
+    depends_on TEXT DEFAULT '[]',
     started_at TIMESTAMP,
     completed_at TIMESTAMP
 );
@@ -50,9 +51,46 @@ CREATE TABLE IF NOT EXISTS approvals (
     resolved_at TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL REFERENCES workflows(id),
+    from_step TEXT NOT NULL,
+    to_step TEXT,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    metadata TEXT DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_steps_workflow ON steps(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_approvals_workflow ON approvals(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_approvals_pending ON approvals(status) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_messages_workflow ON messages(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_messages_to_step ON messages(to_step);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    session_key TEXT PRIMARY KEY,
+    active_workflow_id TEXT,
+    last_channel TEXT NOT NULL DEFAULT '',
+    last_message_at TIMESTAMP,
+    metadata TEXT DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_workflow
+    ON sessions(active_workflow_id) WHERE active_workflow_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS heartbeat_events (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    data TEXT DEFAULT '{}',
+    processed INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_heartbeat_pending
+    ON heartbeat_events(processed) WHERE processed = 0;
 """
 
 

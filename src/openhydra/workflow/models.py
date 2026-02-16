@@ -57,6 +57,7 @@ class Step:
     cost_usd: float = 0.0
     tokens_used: int = 0
     error: str | None = None
+    depends_on: list[int] = field(default_factory=list)
     started_at: datetime | None = None
     completed_at: datetime | None = None
 

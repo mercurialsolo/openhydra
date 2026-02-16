@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
 
-from openhydra.config import OpenHydraConfig, EngineConfig, MemoryConfig
+from openhydra.config import EngineConfig, MemoryConfig, OpenHydraConfig
 from openhydra.db import Database
 
 
