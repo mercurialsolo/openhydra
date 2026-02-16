@@ -310,6 +310,15 @@ class RoleExecutor:
 
         return "\n\n".join(sections)
 
+    # Abstract tool names used in roles.yaml → concrete names from providers.
+    # First match wins, so roles.yaml stays provider-agnostic.
+    _TOOL_ALIASES: dict[str, list[str]] = {
+        "WebSearch": ["tavily_search", "duckduckgo_search", "perplexity_ask"],
+        "WebFetch": ["tavily_extract", "duckduckgo_fetch", "perplexity_research"],
+        "BrowserNavigate": ["navigate", "browser_navigate"],
+        "BrowserRead": ["read_page", "browser_snapshot"],
+    }
+
     def _prepare_tools(self, role: RoleDefinition) -> list[ToolDefinition] | None:
         """Prepare tool list filtered by role's allowed_tools.
 
@@ -317,6 +326,10 @@ class RoleExecutor:
             None  — when allowed_tools is None (unrestricted, provider decides)
             []    — when allowed_tools is [] (deny all tools)
             [tools] — filtered list matching allowed_tools names
+
+        Abstract names in ``_TOOL_ALIASES`` are resolved against the
+        available tool set so roles.yaml doesn't need to change when the
+        user switches search or browser providers.
         """
         if not self._tool_executor:
             return []
@@ -330,8 +343,24 @@ class RoleExecutor:
             return []
 
         all_tools = self._tool_executor.list_all_tools()
-        allowed = set(role.allowed_tools)
-        return [t for t in all_tools if t.name in allowed]
+        available = {t.name for t in all_tools}
+
+        # Resolve aliases: if a name in allowed_tools has an alias mapping,
+        # pick the first concrete name that exists in the available set.
+        resolved: set[str] = set()
+        for name in role.allowed_tools:
+            if name in available:
+                resolved.add(name)
+            elif name in self._TOOL_ALIASES:
+                for alias in self._TOOL_ALIASES[name]:
+                    if alias in available:
+                        resolved.add(alias)
+                        break
+            else:
+                # Keep the name — it may be an MCP tool not yet connected
+                resolved.add(name)
+
+        return [t for t in all_tools if t.name in resolved]
 
     async def _store_summary(
         self, role_id: str, instructions: str, result: SessionResult

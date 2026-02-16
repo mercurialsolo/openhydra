@@ -332,5 +332,13 @@ def config() -> None:
             console.print(f"  {srv.name}: {srv.transport} ({srv.command or srv.url})")
 
 
+@app.command(name="init")
+def init_config() -> None:
+    """Interactive setup wizard — configure providers, tools, and API keys."""
+    from openhydra.cli.init_wizard import run_init_wizard
+
+    run_init_wizard()
+
+
 if __name__ == "__main__":
     app()

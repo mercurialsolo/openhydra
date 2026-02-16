@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +62,9 @@ class Engine:
 
         # Initialize skill sources
         self._init_skills()
+
+        # Resolve MCP templates into concrete server configs
+        self._resolve_mcp_templates()
 
         # Initialize agent providers (lazy imports — missing deps don't crash)
         self._init_providers()
@@ -308,6 +312,57 @@ class Engine:
                 logger.info(f"MCP server '{server_config.name}' connected: {tool_count} tools")
             except Exception as e:
                 logger.warning(f"Failed to connect MCP server '{server_config.name}': {e}")
+
+    def _resolve_mcp_templates(self) -> None:
+        """Resolve MCP templates into concrete McpServerConfig entries.
+
+        Reads ``config.tools.templates.browser`` and ``.search``, looks up
+        the template from the registry, checks required env vars, and
+        appends to ``config.tools.mcp_servers`` (skipping if the user
+        already explicitly configured a server with the same name).
+        """
+        from .config import McpServerConfig
+        from .tools.mcp_templates import get_template
+
+        existing_names = {s.name for s in self.config.tools.mcp_servers}
+        templates_config = self.config.tools.templates
+
+        for choice in (templates_config.browser, templates_config.search):
+            if not choice or choice == "none":
+                continue
+
+            template = get_template(choice)
+            if not template:
+                logger.warning("Unknown MCP template: %s", choice)
+                continue
+
+            if template.name in existing_names:
+                logger.debug(
+                    "MCP server '%s' already configured, skipping template",
+                    template.name,
+                )
+                continue
+
+            # Check required env vars
+            missing = [k for k in template.env_keys if not os.environ.get(k)]
+            if missing:
+                logger.warning(
+                    "MCP template '%s' requires env vars %s — skipping",
+                    template.name, ", ".join(missing),
+                )
+                continue
+
+            # Build env dict from required keys
+            env = {k: os.environ[k] for k in template.env_keys}
+
+            self.config.tools.mcp_servers.append(McpServerConfig(
+                name=template.name,
+                transport="stdio",
+                command=template.command,
+                args=list(template.args),
+                env=env,
+            ))
+            logger.info("Resolved MCP template: %s", template.name)
 
     def _build_mcp_config(self) -> dict[str, Any] | None:
         """Build MCP config dict from configured servers for Claude CLI."""

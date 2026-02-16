@@ -120,8 +120,15 @@ class McpServerConfig:
 
 
 @dataclass
+class McpTemplatesConfig:
+    browser: str = "claude-in-chrome"  # "claude-in-chrome" | "playwright" | "none"
+    search: str = "tavily"  # "tavily" | "duckduckgo" | "perplexity" | "none"
+
+
+@dataclass
 class ToolsConfig:
     mcp_servers: list[McpServerConfig] = field(default_factory=list)
+    templates: McpTemplatesConfig = field(default_factory=McpTemplatesConfig)
 
 
 @dataclass
@@ -236,6 +243,14 @@ def load_config(config_path: Path | None = None) -> OpenHydraConfig:
                 env=srv_raw.get("env", {}),
                 url=srv_raw.get("url"),
             ))
+
+    # Parse MCP templates config
+    if "tools" in raw and "templates" in raw["tools"]:
+        tpl = raw["tools"]["templates"]
+        config.tools.templates = McpTemplatesConfig(
+            browser=tpl.get("browser", "claude-in-chrome"),
+            search=tpl.get("search", "tavily"),
+        )
 
     # Parse web config
     if "web" in raw:
