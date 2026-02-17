@@ -14,8 +14,8 @@ from .routes import build_routes
 from .websocket import WebSocketManager
 
 if TYPE_CHECKING:
+    from openhydra.channels.context import ChannelContext
     from openhydra.config import WebConfig
-    from openhydra.engine import Engine
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 class WebChannel:
     """Web API channel — REST endpoints + WebSocket event streaming."""
 
-    def __init__(self, engine: Engine, config: WebConfig) -> None:
-        self._engine = engine
+    def __init__(self, config: WebConfig, ctx: ChannelContext) -> None:
+        self._engine = ctx.engine
         self._config = config
-        self._ws_manager = WebSocketManager(engine.events, api_key=config.api_key)
+        self._ws_manager = WebSocketManager(ctx.engine.events, api_key=config.api_key)
         self._server_task: asyncio.Task | None = None
         self._app: Starlette | None = None
 

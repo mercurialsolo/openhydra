@@ -15,11 +15,16 @@ from ..events import (
     COST_UPDATED,
     STEP_COMPLETED,
     STEP_FAILED,
+    STEP_PROGRESS,
     STEP_STARTED,
+    STEP_TIMEOUT,
+    WORKFLOW_CANCELLED,
     WORKFLOW_COMPLETED,
     WORKFLOW_CREATED,
     WORKFLOW_EXECUTING,
     WORKFLOW_FAILED,
+    WORKFLOW_PAUSED,
+    WORKFLOW_RESUMED,
     Event,
     EventBus,
 )
@@ -62,6 +67,8 @@ class WorkflowEngine:
         self._mailbox = mailbox
         self._base_dir = base_dir
         self._workspaces: dict[str, Workspace] = {}
+        # Pause control: SET = running, CLEAR = paused
+        self._pause_flags: dict[str, asyncio.Event] = {}
 
     async def create_workflow(self, task: str, steps: list[Step]) -> str:
         """Create a workflow with pre-planned steps. Returns workflow ID."""
@@ -113,6 +120,18 @@ class WorkflowEngine:
             steps = await self._load_steps(workflow_id)
             await self._execute_dag(workflow_id, steps)
 
+            # Re-read status — may have been paused or cancelled externally
+            cursor = await self._db.conn.execute(
+                "SELECT status FROM workflows WHERE id = ?", (workflow_id,)
+            )
+            row = await cursor.fetchone()
+            current_status = row["status"] if row else None
+            if current_status in (
+                WorkflowStatus.PAUSED.value,
+                WorkflowStatus.CANCELLED.value,
+            ):
+                return
+
             # Check if all completed
             steps = await self._load_steps(workflow_id)
             all_done = all(s.status == StepStatus.COMPLETED for s in steps)
@@ -149,15 +168,29 @@ class WorkflowEngine:
                 type=WORKFLOW_FAILED,
                 data={"workflow_id": workflow_id, "error": str(e)},
             ))
+        finally:
+            self._pause_flags.pop(workflow_id, None)
 
     async def _execute_dag(self, workflow_id: str, steps: list[Step]) -> None:
         """Execute steps respecting depends_on DAG ordering."""
+        # Create/retrieve pause flag — SET = running
+        flag = self._pause_flags.get(workflow_id)
+        if not flag:
+            flag = asyncio.Event()
+            self._pause_flags[workflow_id] = flag
+        flag.set()
+
+        total_steps = len(steps)
         completed_ordinals: set[int] = {
             s.ordinal for s in steps if s.status == StepStatus.COMPLETED
         }
         pending = [s for s in steps if s.status == StepStatus.PENDING]
 
         while pending:
+            # Check if paused or cancelled before starting new batch
+            if not flag.is_set():
+                return
+
             # Find steps whose dependencies are all satisfied
             ready = [
                 s for s in pending
@@ -177,6 +210,23 @@ class WorkflowEngine:
                     pass
                 elif result is True:
                     completed_ordinals.add(step.ordinal)
+
+            # Emit progress
+            completed_count = len(completed_ordinals)
+            progress_pct = int(completed_count / total_steps * 100) if total_steps else 0
+            await self._events.emit(Event(
+                type=STEP_PROGRESS,
+                data={
+                    "workflow_id": workflow_id,
+                    "completed_steps": completed_count,
+                    "total_steps": total_steps,
+                    "progress_pct": progress_pct,
+                },
+            ))
+
+            # Check pause flag again after gather completes
+            if not flag.is_set():
+                return
 
             # Reload pending steps
             steps = await self._load_steps(workflow_id)
@@ -267,14 +317,44 @@ class WorkflowEngine:
                 except Exception:
                     pass
 
+            # Determine step timeout from role budget
+            timeout_secs: float | None = None
+            try:
+                role = self._roles.get(step.role_id)
+                if role.budget and role.budget.max_duration_minutes > 0:
+                    timeout_secs = role.budget.max_duration_minutes * 60
+            except (KeyError, AttributeError):
+                pass
+
             # Execute via RoleExecutor (don't store memory yet — we'll store with outcome)
-            result = await self._role_executor.execute(
+            execute_coro = self._role_executor.execute(
                 role_id=step.role_id,
                 instructions=step.instructions,
                 context=context,
                 messages=messages,
                 store_memory=False,
             )
+            try:
+                result = await asyncio.wait_for(execute_coro, timeout=timeout_secs)
+            except asyncio.TimeoutError:
+                error_msg = (
+                    f"Step timed out after {timeout_secs:.0f}s "
+                    f"(max_duration_minutes={timeout_secs / 60:.0f})"
+                )
+                await self._db.conn.execute(
+                    "UPDATE steps SET status = ?, error = ? WHERE id = ?",
+                    (StepStatus.FAILED.value, error_msg, step.id),
+                )
+                await self._db.conn.commit()
+                await self._events.emit(Event(
+                    type=STEP_TIMEOUT,
+                    data={
+                        "workflow_id": workflow_id,
+                        "step_id": step.id,
+                        "error": error_msg,
+                    },
+                ))
+                return False, None
 
             # Write output BEFORE gate checking
             await self._db.conn.execute(
@@ -422,6 +502,93 @@ class WorkflowEngine:
         if event:
             event.set()
 
+    async def pause_workflow(self, workflow_id: str, paused_by: str = "") -> None:
+        """Pause a running workflow. Currently-executing steps finish, but no new steps start."""
+        wf = await self.get_workflow(workflow_id)
+        status = wf["status"]
+        if status not in (WorkflowStatus.EXECUTING.value, WorkflowStatus.WAITING_APPROVAL.value):
+            raise ValueError(
+                f"Cannot pause workflow in '{status}' state "
+                f"(must be executing or waiting_approval)"
+            )
+
+        # Signal the DAG loop to stop picking up new steps
+        flag = self._pause_flags.get(workflow_id)
+        if flag:
+            flag.clear()
+
+        now = datetime.now(timezone.utc).isoformat()
+        await self._db.conn.execute(
+            "UPDATE workflows SET status = ?, paused_at = ?, paused_by = ?, updated_at = ? "
+            "WHERE id = ?",
+            (WorkflowStatus.PAUSED.value, now, paused_by, now, workflow_id),
+        )
+        await self._db.conn.commit()
+        await self._events.emit(Event(
+            type=WORKFLOW_PAUSED,
+            data={"workflow_id": workflow_id, "paused_by": paused_by},
+        ))
+
+    async def resume_workflow(self, workflow_id: str) -> asyncio.Task:
+        """Resume a paused workflow. Returns the new background task."""
+        wf = await self.get_workflow(workflow_id)
+        status = wf["status"]
+        if status != WorkflowStatus.PAUSED.value:
+            raise ValueError(
+                f"Cannot resume workflow in '{status}' state (must be paused)"
+            )
+
+        # Set the pause flag so the DAG loop will proceed
+        flag = self._pause_flags.get(workflow_id)
+        if flag:
+            flag.set()
+
+        now = datetime.now(timezone.utc).isoformat()
+        await self._db.conn.execute(
+            "UPDATE workflows SET status = ?, paused_at = NULL, updated_at = ? WHERE id = ?",
+            (WorkflowStatus.EXECUTING.value, now, workflow_id),
+        )
+        await self._db.conn.commit()
+        await self._events.emit(Event(
+            type=WORKFLOW_RESUMED,
+            data={"workflow_id": workflow_id},
+        ))
+
+        task = asyncio.create_task(self.execute_workflow(workflow_id))
+        return task
+
+    async def cancel_workflow(self, workflow_id: str) -> None:
+        """Cancel a workflow. Running steps finish, pending steps are skipped."""
+        wf = await self.get_workflow(workflow_id)
+        status = wf["status"]
+        allowed = {
+            WorkflowStatus.EXECUTING.value,
+            WorkflowStatus.PAUSED.value,
+            WorkflowStatus.WAITING_APPROVAL.value,
+            WorkflowStatus.WAITING_INPUT.value,
+        }
+        if status not in allowed:
+            raise ValueError(
+                f"Cannot cancel workflow in '{status}' state"
+            )
+
+        # Signal DAG loop to stop
+        flag = self._pause_flags.get(workflow_id)
+        if flag:
+            flag.clear()
+
+        # Bulk-skip all pending steps
+        await self._db.conn.execute(
+            "UPDATE steps SET status = ? WHERE workflow_id = ? AND status = ?",
+            (StepStatus.SKIPPED.value, workflow_id, StepStatus.PENDING.value),
+        )
+        await self._update_workflow_status(workflow_id, WorkflowStatus.CANCELLED)
+        await self._db.conn.commit()
+        await self._events.emit(Event(
+            type=WORKFLOW_CANCELLED,
+            data={"workflow_id": workflow_id},
+        ))
+
     async def get_workflow(self, workflow_id: str) -> dict[str, Any]:
         """Load a workflow and its steps from the DB."""
         cursor = await self._db.conn.execute(
@@ -442,6 +609,8 @@ class WorkflowEngine:
             "error": row["error"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
+            "paused_at": row["paused_at"],
+            "paused_by": row["paused_by"] or "",
             "steps": [
                 {
                     "id": s.id,

@@ -41,8 +41,9 @@ uv run ruff check src/ tests/
 2. **Adapters are protocols.** Memory, agents, skills use `Protocol` classes — swap implementations freely.
 3. **State survives crashes.** Every state transition writes to SQLite before execution.
 4. **Skills are files.** SKILL.md + metadata.yaml on disk. No database for skill content.
-5. **Roles are config.** `config/roles.yaml` defines behavior. No role-specific code.
-6. **Events decouple.** Core emits events, interfaces subscribe. No callbacks or direct coupling.
+5. **Skills can be generated.** `SkillBuilder` generates skills on-the-fly via LLM when not found on disk. Enabled by default (`skills.builder_enabled`). Generated skills are written to `~/.openhydra/generated_skills/` and scored with a heuristic quality gate before acceptance.
+6. **Roles are config.** `config/roles.yaml` defines behavior. No role-specific code.
+7. **Events decouple.** Core emits events, interfaces subscribe. No callbacks or direct coupling.
 
 ## File Layout
 
@@ -55,7 +56,8 @@ src/openhydra/
 
   workflow/          # State machine, planner
   agents/            # Agent providers (Claude, Anthropic API, Ollama)
-  skills/            # Skill loading and provisioning
+  skills/            # Skill loading, provisioning, and dynamic generation
+    builder.py       # LLM-powered skill generation (SkillBuilder)
   memory/            # Vector memory backends
   roles/             # Role catalog + prompt assembly
   gates/             # Quality gates between steps

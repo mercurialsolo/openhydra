@@ -17,6 +17,7 @@ class SkillMetadata:
     priority: int = 2  # 0=core, 1=matched, 2=supplementary
     token_estimate: int = 0  # approximate token count
     has_summary: bool = False
+    quality_score: int = 0  # 0 = unscored, 1-12 = heuristic quality rating
 
 
 @dataclass

@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS workflows (
     total_cost_usd REAL DEFAULT 0.0,
     total_tokens INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    paused_at TIMESTAMP,
+    paused_by TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS steps (
@@ -91,6 +93,75 @@ CREATE TABLE IF NOT EXISTS heartbeat_events (
 );
 CREATE INDEX IF NOT EXISTS idx_heartbeat_pending
     ON heartbeat_events(processed) WHERE processed = 0;
+
+-- Skill security scanning
+CREATE TABLE IF NOT EXISTS skill_approvals (
+    skill_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'pending_review',
+    source_path TEXT DEFAULT '',
+    scan_result_json TEXT DEFAULT '',
+    approved_by TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_skill_approvals_status ON skill_approvals(status);
+
+-- Channel authorization
+CREATE TABLE IF NOT EXISTS authorized_identities (
+    identity_key TEXT PRIMARY KEY,  -- "channel:user_id"
+    channel TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_name TEXT DEFAULT '',
+    authorized_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    authorized_via TEXT DEFAULT 'auth_code'
+);
+CREATE INDEX IF NOT EXISTS idx_auth_identities_channel ON authorized_identities(channel);
+
+CREATE TABLE IF NOT EXISTS auth_challenges (
+    code TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_name TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    resolved INTEGER DEFAULT 0
+);
+
+-- Agenda items for scheduled autonomous tasks
+CREATE TABLE IF NOT EXISTS agenda_items (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL DEFAULT 'assistant_md',
+    schedule TEXT NOT NULL,
+    instruction TEXT NOT NULL,
+    permission TEXT NOT NULL DEFAULT 'read',
+    enabled INTEGER DEFAULT 1,
+    last_run_at TIMESTAMP,
+    next_run_at TIMESTAMP,
+    run_count INTEGER DEFAULT 0,
+    last_workflow_id TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_agenda_enabled ON agenda_items(enabled) WHERE enabled = 1;
+CREATE INDEX IF NOT EXISTS idx_agenda_next_run ON agenda_items(next_run_at) WHERE enabled = 1;
+
+-- Delivery queue for autonomous task results
+CREATE TABLE IF NOT EXISTS delivery_queue (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL,
+    recipient_channel TEXT NOT NULL,
+    recipient_id TEXT NOT NULL,
+    subject TEXT DEFAULT '',
+    body TEXT NOT NULL,
+    priority TEXT DEFAULT 'normal',
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    delivered_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_delivery_pending
+    ON delivery_queue(status) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_delivery_recipient
+    ON delivery_queue(recipient_channel, recipient_id);
 """
 
 
@@ -110,12 +181,25 @@ class Database:
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.execute("PRAGMA foreign_keys=ON")
         await self._conn.commit()
+        await self._migrate()
 
     async def close(self) -> None:
         """Close database connection."""
         if self._conn:
             await self._conn.close()
             self._conn = None
+
+    async def _migrate(self) -> None:
+        """Apply idempotent schema migrations for columns added after initial release."""
+        for sql in [
+            "ALTER TABLE workflows ADD COLUMN paused_at TIMESTAMP",
+            "ALTER TABLE workflows ADD COLUMN paused_by TEXT DEFAULT ''",
+        ]:
+            try:
+                await self._conn.execute(sql)
+            except Exception:
+                pass  # Column already exists
+        await self._conn.commit()
 
     @property
     def conn(self) -> aiosqlite.Connection:

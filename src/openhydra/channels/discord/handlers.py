@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any
 from .formatters import event_to_button_labels, event_to_embed, event_to_text
 
 if TYPE_CHECKING:
-    from openhydra.channels.session import SessionStore
-    from openhydra.engine import Engine
+    from openhydra.channels.access import AccessControl
+    from openhydra.channels.context import ChannelContext
     from openhydra.events import Event
 
 logger = logging.getLogger(__name__)
@@ -22,33 +22,37 @@ class DiscordHandlers:
     def __init__(
         self,
         client: Any,
-        engine: Engine,
-        sessions: SessionStore | None = None,
-        allowed_users: list[str] | None = None,
-        debouncer: Any = None,
+        ctx: ChannelContext,
+        access: AccessControl,
     ) -> None:
         self._client = client
-        self._engine = engine
-        self._sessions = sessions
-        self._allowed_users = allowed_users or []
-        self._debouncer = debouncer
+        self._engine = ctx.engine
+        self._sessions = ctx.sessions
+        self._debouncer = ctx.debouncer
+        self._access = access
         # Map workflow_id → (channel_id, thread_id) for threaded replies
         self._threads: dict[str, tuple[int, int]] = {}
 
-    def _is_allowed(self, user_id: str) -> bool:
-        if not self._allowed_users:
-            return True
-        return user_id in self._allowed_users
+    async def _check_access(self, user_id: str, interaction: Any = None) -> bool:
+        """Check if user is allowed — delegates to AccessControl."""
+        async def notify(msg: str) -> None:
+            if interaction:
+                await interaction.response.send_message(msg)
+
+        return await self._access.check_and_notify("discord", user_id, notify_fn=notify)
 
     def register(self) -> None:
-        """Register slash command tree and interaction handlers."""
+        """Register slash command tree, interaction handlers, and subscribe to events."""
         import discord
         from discord import app_commands
 
         tree = app_commands.CommandTree(self._client)
 
         @tree.command(name="hydra", description="OpenHydra task management")
-        @app_commands.describe(action="run|status|approve|reject", argument="Task or ID")
+        @app_commands.describe(
+            action="run|status|approve|reject|pause|resume|cancel",
+            argument="Task, workflow ID, or approval ID",
+        )
         async def hydra_command(
             interaction: discord.Interaction, action: str, argument: str = "",
         ) -> None:
@@ -63,6 +67,9 @@ class DiscordHandlers:
                 custom_id = interaction.data.get("custom_id", "")
                 await self._handle_button(interaction, custom_id)
 
+        # Subscribe to engine events via EventBus
+        self._engine.events.on_all(self.on_engine_event)
+
     async def sync_commands(self) -> None:
         """Sync slash commands with Discord (call after bot is ready)."""
         await self._tree.sync()
@@ -72,8 +79,7 @@ class DiscordHandlers:
     ) -> None:
         """Route /hydra subcommands to engine operations."""
         user_id = str(interaction.user.id) if hasattr(interaction, "user") else ""
-        if not self._is_allowed(user_id):
-            await interaction.response.send_message("You are not authorized to use this bot.")
+        if not await self._check_access(user_id, interaction=interaction):
             return
 
         action = action.lower().strip()
@@ -137,9 +143,31 @@ class DiscordHandlers:
             await self._engine.reject(argument, "Rejected via Discord")
             await interaction.response.send_message(f"Rejected `{argument}`")
 
+        elif action == "pause":
+            if not argument:
+                await interaction.response.send_message("Please provide a workflow ID.")
+                return
+            await self._engine.pause(argument)
+            await interaction.response.send_message(f"Paused workflow `{argument[:8]}`")
+
+        elif action == "resume":
+            if not argument:
+                await interaction.response.send_message("Please provide a workflow ID.")
+                return
+            await self._engine.resume(argument)
+            await interaction.response.send_message(f"Resumed workflow `{argument[:8]}`")
+
+        elif action == "cancel":
+            if not argument:
+                await interaction.response.send_message("Please provide a workflow ID.")
+                return
+            await self._engine.cancel(argument)
+            await interaction.response.send_message(f"Cancelled workflow `{argument[:8]}`")
+
         else:
             await interaction.response.send_message(
-                f"Unknown action: `{action}`. Use `run`, `status`, `approve`, or `reject`.",
+                f"Unknown action: `{action}`. "
+                f"Use `run`, `status`, `approve`, `reject`, `pause`, `resume`, or `cancel`.",
             )
 
     async def _handle_status(self, interaction: Any, argument: str) -> None:
@@ -167,7 +195,7 @@ class DiscordHandlers:
             await interaction.followup.send("\n".join(lines))
 
     async def _handle_button(self, interaction: Any, custom_id: str) -> None:
-        """Handle approve/reject button clicks."""
+        """Handle approve/reject/pause/resume/cancel button clicks."""
         if custom_id.startswith("approve:"):
             approval_id = custom_id[len("approve:"):]
             await self._engine.approve(approval_id)
@@ -176,6 +204,18 @@ class DiscordHandlers:
             approval_id = custom_id[len("reject:"):]
             await self._engine.reject(approval_id, "Rejected via Discord")
             await interaction.response.send_message(f"Rejected `{approval_id}`")
+        elif custom_id.startswith("pause:"):
+            wf_id = custom_id[len("pause:"):]
+            await self._engine.pause(wf_id)
+            await interaction.response.send_message(f"Paused workflow `{wf_id[:8]}`")
+        elif custom_id.startswith("resume:"):
+            wf_id = custom_id[len("resume:"):]
+            await self._engine.resume(wf_id)
+            await interaction.response.send_message(f"Resumed workflow `{wf_id[:8]}`")
+        elif custom_id.startswith("cancel:"):
+            wf_id = custom_id[len("cancel:"):]
+            await self._engine.cancel(wf_id)
+            await interaction.response.send_message(f"Cancelled workflow `{wf_id[:8]}`")
 
     async def on_engine_event(self, event: Event) -> None:
         """Forward engine events to the appropriate Discord thread."""
@@ -185,7 +225,7 @@ class DiscordHandlers:
             return
 
         # Cleanup first — always runs even if send fails
-        is_terminal = event.type in ("workflow.completed", "workflow.failed")
+        is_terminal = event.type in ("workflow.completed", "workflow.failed", "workflow.cancelled")
 
         channel_id, message_id = thread_info
         embed_dict = event_to_embed(event)

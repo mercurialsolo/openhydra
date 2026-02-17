@@ -8,9 +8,14 @@ STATUS_EMOJI = {
     "workflow.created": "\U0001f680",       # rocket
     "workflow.completed": "\u2705",          # check mark
     "workflow.failed": "\u274c",             # cross
+    "workflow.paused": "\u23f8\ufe0f",       # pause
+    "workflow.resumed": "\u25b6\ufe0f",      # play
+    "workflow.cancelled": "\U0001f6d1",      # stop sign
     "step.started": "\u2699\ufe0f",          # gear
     "step.completed": "\u2705",
     "step.failed": "\u274c",
+    "step.timeout": "\u23f0",                # alarm
+    "step.progress": "\U0001f4ca",           # bar chart
     "approval.requested": "\u270b",          # raised hand
 }
 
@@ -38,9 +43,17 @@ def _event_header(event: Event, emoji: str) -> str:
         "workflow.created": f"{emoji} Workflow {wf_id} created",
         "workflow.completed": f"{emoji} Workflow {wf_id} completed",
         "workflow.failed": f"{emoji} Workflow {wf_id} failed",
+        "workflow.paused": f"{emoji} Workflow {wf_id} paused",
+        "workflow.resumed": f"{emoji} Workflow {wf_id} resumed",
+        "workflow.cancelled": f"{emoji} Workflow {wf_id} cancelled",
         "step.started": f"{emoji} Step started: {event.data.get('role_id', '')}",
         "step.completed": f"{emoji} Step completed: {event.data.get('role_id', '')}",
         "step.failed": f"{emoji} Step failed: {event.data.get('role_id', '')}",
+        "step.timeout": f"{emoji} Step timed out: {event.data.get('step_id', '')}",
+        "step.progress": (
+            f"{emoji} Progress: {event.data.get('progress_pct', 0)}% "
+            f"({event.data.get('completed_steps', 0)}/{event.data.get('total_steps', 0)})"
+        ),
         "approval.requested": f"{emoji} Approval needed for {wf_id}",
     }
     return headers.get(event.type, f"{emoji} {event.type}")
@@ -65,5 +78,8 @@ def _event_details(event: Event) -> str:
     if prompt := event.data.get("prompt"):
         parts.append(f"Prompt: {prompt}")
         parts.append("Reply 'approve' or 'reject' to respond.")
+
+    if event.type == "workflow.paused":
+        parts.append("Reply 'resume' to continue or 'cancel' to stop.")
 
     return "\n".join(parts)

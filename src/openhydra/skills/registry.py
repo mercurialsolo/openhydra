@@ -8,8 +8,9 @@ from .base import SkillContent, SkillMetadata, SkillSource
 class SkillRegistry:
     """Registry that aggregates skills from multiple sources."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_skills_per_role: int = 3) -> None:
         self._sources: list[SkillSource] = []
+        self._max_skills_per_role = max_skills_per_role
 
     def add_source(self, source: SkillSource) -> None:
         """Add a skill source to the registry."""
@@ -46,6 +47,9 @@ class SkillRegistry:
         remaining = token_budget
 
         for skill_id in skill_ids:
+            if len(loaded) >= self._max_skills_per_role:
+                break
+
             try:
                 skill = await self.load(skill_id)
             except KeyError:

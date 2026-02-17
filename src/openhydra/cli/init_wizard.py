@@ -89,17 +89,26 @@ def run_init_wizard() -> None:
         default=default_provider,
     )
 
-    # 3. Pick browser tool
-    console.print("\n[bold]Browser automation:[/bold]")
-    browser = _pick_option(
-        "Browser tool",
+    # 3. Pick primary browser tool (fallbacks auto-added)
+    console.print("\n[bold]Browser automation (fallback chain):[/bold]")
+    console.print("  Primary choice runs first; others are tried if it fails to connect.\n")
+    primary_browser = _pick_option(
+        "Primary browser",
         [
             ("claude-in-chrome", "Claude in Chrome (requires extension)"),
             ("playwright", "Playwright (headless, auto-installs)"),
-            ("none", "None"),
+            ("puppeteer", "Puppeteer (headless Chrome via npx)"),
+            ("browserbase", "Browserbase (cloud, requires API key)"),
         ],
         default="claude-in-chrome",
     )
+
+    # Build ordered fallback list: primary first, then other local options
+    _all_browsers = ["claude-in-chrome", "playwright", "puppeteer", "browserbase"]
+    browser: list[str] = [primary_browser]
+    for b in _all_browsers:
+        if b != primary_browser and b != "browserbase":
+            browser.append(b)
 
     # 4. Pick search tool
     console.print("\n[bold]Web search:[/bold]")
@@ -116,6 +125,15 @@ def run_init_wizard() -> None:
 
     # 5. Prompt for missing API keys
     env_hints: list[str] = []
+    if "browserbase" in browser:
+        if not os.environ.get("BROWSERBASE_API_KEY"):
+            console.print(
+                "\n[yellow]Browserbase requires BROWSERBASE_API_KEY.[/yellow] "
+                "Get one at https://browserbase.com"
+            )
+            env_hints.append("export BROWSERBASE_API_KEY=<your-key>")
+        if not os.environ.get("BROWSERBASE_PROJECT_ID"):
+            env_hints.append("export BROWSERBASE_PROJECT_ID=<your-project-id>")
     if search == "tavily" and not os.environ.get("TAVILY_API_KEY"):
         console.print(
             "\n[yellow]Tavily requires TAVILY_API_KEY.[/yellow] "
@@ -165,10 +183,18 @@ def run_init_wizard() -> None:
     with open(config_path, "w") as f:
         yaml.safe_dump(existing, f, default_flow_style=False)
 
+    # Create default ASSISTANT.md if absent
+    assistant_path = config_dir / "ASSISTANT.md"
+    if not assistant_path.exists():
+        from openhydra.assistant import DEFAULT_ASSISTANT_MD
+
+        assistant_path.write_text(DEFAULT_ASSISTANT_MD, encoding="utf-8")
+        console.print(f"[bold green]Created {assistant_path}[/bold green]")
+
     # Summary
     console.print(f"\n[bold green]Config written to {config_path}[/bold green]")
     console.print(f"  Provider: {provider}")
-    console.print(f"  Browser:  {browser}")
+    console.print(f"  Browser:  {' → '.join(browser)}")
     console.print(f"  Search:   {search}")
     console.print(f"  API key:  {api_key}")
 

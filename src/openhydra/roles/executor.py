@@ -34,12 +34,14 @@ class RoleExecutor:
         skills: SkillRegistry,
         memory: MemoryStore | None = None,
         tool_executor: ToolExecutor | None = None,
+        assistant_text: str = "",
     ) -> None:
         self._roles = roles
         self._agents = agents
         self._skills = skills
         self._memory = memory
         self._tool_executor = tool_executor
+        self._assistant_text = assistant_text
         self._store_counts: dict[str, int] = {}
         self._compactor: MemoryCompactor | None = None
         if memory:
@@ -283,7 +285,10 @@ class RoleExecutor:
         messages: list[dict[str, str]] | None,
     ) -> str:
         """Build the full system prompt from all components."""
-        sections = [f"# Role: {role.name}", role.description]
+        sections = []
+        if self._assistant_text:
+            sections.append(self._assistant_text)
+        sections.extend([f"# Role: {role.name}", role.description])
 
         # Previous step outputs
         prev_outputs = context.get("previous_outputs")
@@ -315,8 +320,26 @@ class RoleExecutor:
     _TOOL_ALIASES: dict[str, list[str]] = {
         "WebSearch": ["tavily_search", "duckduckgo_search", "perplexity_ask"],
         "WebFetch": ["tavily_extract", "duckduckgo_fetch", "perplexity_research"],
-        "BrowserNavigate": ["navigate", "browser_navigate"],
-        "BrowserRead": ["read_page", "browser_snapshot"],
+        "BrowserNavigate": [
+            "navigate", "browser_navigate",  # claude-in-chrome / playwright
+            "puppeteer_navigate",  # puppeteer
+        ],
+        "BrowserRead": [
+            "read_page", "browser_snapshot",  # claude-in-chrome / playwright
+            "puppeteer_screenshot",  # puppeteer
+        ],
+        "BrowserClick": [
+            "browser_click",  # playwright
+            "puppeteer_click",  # puppeteer
+        ],
+        "BrowserType": [
+            "browser_type", "form_input",  # playwright / claude-in-chrome
+            "puppeteer_fill",  # puppeteer
+        ],
+        "BrowserScreenshot": [
+            "browser_screenshot",  # playwright
+            "puppeteer_screenshot",  # puppeteer
+        ],
     }
 
     def _prepare_tools(self, role: RoleDefinition) -> list[ToolDefinition] | None:

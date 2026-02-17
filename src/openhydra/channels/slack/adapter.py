@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from openhydra.channels.session import SessionStore
+    from openhydra.channels.context import ChannelContext
     from openhydra.config import SlackConfig
-    from openhydra.engine import Engine
 
 logger = logging.getLogger(__name__)
 
@@ -19,15 +18,12 @@ class SlackChannel:
 
     def __init__(
         self,
-        engine: Engine,
         config: SlackConfig,
-        sessions: SessionStore | None = None,
-        debouncer: Any = None,
+        ctx: ChannelContext,
     ) -> None:
-        self._engine = engine
+        self._engine = ctx.engine
         self._config = config
-        self._sessions = sessions
-        self._debouncer = debouncer
+        self._ctx = ctx
         self._task: asyncio.Task | None = None
         self._handlers = None
 
@@ -42,19 +38,18 @@ class SlackChannel:
 
         bolt_app = AsyncApp(token=self._config.bot_token)
 
+        from openhydra.channels.access import AccessControl
+
         from .handlers import SlackHandlers
 
-        self._handlers = SlackHandlers(
-            bolt_app,
-            self._engine,
-            sessions=self._sessions,
-            allowed_users=self._config.allowed_users,
-            debouncer=self._debouncer,
+        access = AccessControl(
+            allowed_ids=self._config.allowed_users,
+            auth_store=self._ctx.auth_store,
+            auth_manager=self._ctx.auth_manager,
         )
-        self._handlers.register()
 
-        # Subscribe to engine events
-        self._engine.events.on_all(self._handlers.on_engine_event)
+        self._handlers = SlackHandlers(bolt_app, self._ctx, access)
+        self._handlers.register()
 
         handler = AsyncSocketModeHandler(bolt_app, self._config.app_token)
         self._task = asyncio.create_task(handler.start_async())

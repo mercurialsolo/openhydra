@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from openhydra.channels.access import AccessControl
 from openhydra.channels.base import Channel
+from openhydra.channels.context import ChannelContext
 from openhydra.channels.discord.handlers import DiscordHandlers
 from openhydra.events import Event, EventBus
 
@@ -17,6 +19,9 @@ class FakeEngine:
         self.submit = AsyncMock(return_value="wf-123")
         self.approve = AsyncMock()
         self.reject = AsyncMock()
+        self.pause = AsyncMock()
+        self.resume = AsyncMock(return_value="wf-123")
+        self.cancel = AsyncMock()
         self.get_status = AsyncMock(return_value={"id": "wf-123", "status": "running"})
         self.list_workflows = AsyncMock(return_value=[])
 
@@ -58,27 +63,33 @@ def client():
     return FakeClient()
 
 
+def _ctx(engine=None):
+    return ChannelContext(engine=engine or FakeEngine())
+
+
 @pytest.fixture
 def handlers(client, engine):
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
     return h
 
 
 def test_discord_channel_protocol_conformance():
+    from openhydra.channels.context import ChannelContext
     from openhydra.channels.discord.adapter import DiscordChannel
     from openhydra.config import DiscordConfig
 
-    engine = FakeEngine()
-    ch = DiscordChannel(engine, DiscordConfig())
+    ctx = ChannelContext(engine=FakeEngine())
+    ch = DiscordChannel(DiscordConfig(), ctx)
     assert isinstance(ch, Channel)
 
 
 def test_discord_channel_name():
+    from openhydra.channels.context import ChannelContext
     from openhydra.channels.discord.adapter import DiscordChannel
     from openhydra.config import DiscordConfig
 
-    engine = FakeEngine()
-    ch = DiscordChannel(engine, DiscordConfig())
+    ctx = ChannelContext(engine=FakeEngine())
+    ch = DiscordChannel(DiscordConfig(), ctx)
     assert ch.name == "discord"
 
 
@@ -86,7 +97,7 @@ def test_discord_channel_name():
 async def test_handle_run_command(engine):
     """The run action calls engine.submit."""
     client = FakeClient()
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
 
     interaction = _make_interaction()
     await h._handle_command(interaction, "run", "build a thing")
@@ -100,7 +111,7 @@ async def test_handle_run_command(engine):
 async def test_handle_run_empty_argument(engine):
     """Empty task description prompts the user."""
     client = FakeClient()
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
 
     interaction = _make_interaction()
     await h._handle_command(interaction, "run", "")
@@ -112,7 +123,7 @@ async def test_handle_run_empty_argument(engine):
 @pytest.mark.asyncio
 async def test_handle_approve_command(engine):
     client = FakeClient()
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
 
     interaction = _make_interaction()
     await h._handle_command(interaction, "approve", "ap-1")
@@ -123,7 +134,7 @@ async def test_handle_approve_command(engine):
 @pytest.mark.asyncio
 async def test_handle_reject_command(engine):
     client = FakeClient()
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
 
     interaction = _make_interaction()
     await h._handle_command(interaction, "reject", "ap-1")
@@ -134,7 +145,7 @@ async def test_handle_reject_command(engine):
 @pytest.mark.asyncio
 async def test_handle_unknown_action(engine):
     client = FakeClient()
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
 
     interaction = _make_interaction()
     await h._handle_command(interaction, "foobar", "")
@@ -146,7 +157,7 @@ async def test_handle_unknown_action(engine):
 @pytest.mark.asyncio
 async def test_button_approve(engine):
     client = FakeClient()
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
 
     interaction = MagicMock()
     interaction.response = MagicMock()
@@ -160,7 +171,7 @@ async def test_button_approve(engine):
 @pytest.mark.asyncio
 async def test_button_reject(engine):
     client = FakeClient()
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
 
     interaction = MagicMock()
     interaction.response = MagicMock()
@@ -175,7 +186,7 @@ async def test_button_reject(engine):
 async def test_engine_event_ignored_without_thread(engine):
     """Events for untracked workflows are silently ignored."""
     client = FakeClient()
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
 
     event = Event(type="step.completed", data={"workflow_id": "wf-unknown"})
     await h.on_engine_event(event)
@@ -188,7 +199,7 @@ async def test_engine_event_ignored_without_thread(engine):
 async def test_engine_event_cleanup_on_completion(engine):
     """Thread mapping is cleaned up when workflow completes."""
     client = FakeClient()
-    h = DiscordHandlers(client, engine)
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
     h._threads["wf-123"] = (1, 2)
 
     event = Event(type="workflow.completed", data={"workflow_id": "wf-123"})
@@ -198,10 +209,96 @@ async def test_engine_event_cleanup_on_completion(engine):
 
 
 @pytest.mark.asyncio
+async def test_handle_pause_command(engine):
+    client = FakeClient()
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
+
+    interaction = _make_interaction()
+    await h._handle_command(interaction, "pause", "wf-123")
+
+    engine.pause.assert_called_once_with("wf-123")
+
+
+@pytest.mark.asyncio
+async def test_handle_resume_command(engine):
+    client = FakeClient()
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
+
+    interaction = _make_interaction()
+    await h._handle_command(interaction, "resume", "wf-123")
+
+    engine.resume.assert_called_once_with("wf-123")
+
+
+@pytest.mark.asyncio
+async def test_handle_cancel_command(engine):
+    client = FakeClient()
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
+
+    interaction = _make_interaction()
+    await h._handle_command(interaction, "cancel", "wf-123")
+
+    engine.cancel.assert_called_once_with("wf-123")
+
+
+@pytest.mark.asyncio
+async def test_button_pause(engine):
+    client = FakeClient()
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
+
+    interaction = MagicMock()
+    interaction.response = MagicMock()
+    interaction.response.send_message = AsyncMock()
+
+    await h._handle_button(interaction, "pause:wf-42")
+    engine.pause.assert_called_once_with("wf-42")
+
+
+@pytest.mark.asyncio
+async def test_button_resume(engine):
+    client = FakeClient()
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
+
+    interaction = MagicMock()
+    interaction.response = MagicMock()
+    interaction.response.send_message = AsyncMock()
+
+    await h._handle_button(interaction, "resume:wf-42")
+    engine.resume.assert_called_once_with("wf-42")
+
+
+@pytest.mark.asyncio
+async def test_button_cancel(engine):
+    client = FakeClient()
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
+
+    interaction = MagicMock()
+    interaction.response = MagicMock()
+    interaction.response.send_message = AsyncMock()
+
+    await h._handle_button(interaction, "cancel:wf-42")
+    engine.cancel.assert_called_once_with("wf-42")
+
+
+@pytest.mark.asyncio
+async def test_engine_event_cleanup_on_cancel(engine):
+    """Thread mapping is cleaned up when workflow is cancelled."""
+    client = FakeClient()
+    h = DiscordHandlers(client, _ctx(engine), AccessControl())
+    h._threads["wf-123"] = (1, 2)
+
+    event = Event(type="workflow.cancelled", data={"workflow_id": "wf-123"})
+    await h.on_engine_event(event)
+
+    assert "wf-123" not in h._threads
+
+
+@pytest.mark.asyncio
 async def test_stop_without_start():
+    from openhydra.channels.context import ChannelContext
     from openhydra.channels.discord.adapter import DiscordChannel
     from openhydra.config import DiscordConfig
 
-    engine = FakeEngine()
-    ch = DiscordChannel(engine, DiscordConfig())
+    ctx = ChannelContext(engine=FakeEngine())
+    ch = DiscordChannel(DiscordConfig(), ctx)
     await ch.stop()  # Should not raise

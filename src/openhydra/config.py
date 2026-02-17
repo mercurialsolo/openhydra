@@ -7,6 +7,7 @@ import os
 import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -52,6 +53,10 @@ class SkillSourceConfig:
 @dataclass
 class SkillsConfig:
     sources: list[SkillSourceConfig] = field(default_factory=list)
+    builder_enabled: bool = False  # self-generated skills hurt more than help
+    generated_dir: str = ""  # defaults to state_dir/generated_skills
+    max_skills_per_role: int = 3  # optimal count per SkillsBench findings
+    builder_quality_threshold: int = 6  # min score (0-12) for generated skills
 
 
 @dataclass
@@ -91,11 +96,35 @@ class WhatsAppConfig:
 
 
 @dataclass
+class EmailConfig:
+    enabled: bool = False
+    imap_host: str = ""        # env: OPENHYDRA_EMAIL_IMAP_HOST
+    imap_port: int = 993
+    smtp_host: str = ""        # env: OPENHYDRA_EMAIL_SMTP_HOST
+    smtp_port: int = 587
+    username: str = ""         # env: OPENHYDRA_EMAIL_USERNAME
+    password: str = ""         # env: OPENHYDRA_EMAIL_PASSWORD
+    auth_method: str = "password"  # "password" or "oauth2"
+    oauth_client_id: str = ""      # env: OPENHYDRA_EMAIL_OAUTH_CLIENT_ID
+    oauth_client_secret: str = ""  # env: OPENHYDRA_EMAIL_OAUTH_CLIENT_SECRET
+    oauth_refresh_token: str = ""  # env: OPENHYDRA_EMAIL_OAUTH_REFRESH_TOKEN
+    oauth_token_uri: str = "https://oauth2.googleapis.com/token"
+    poll_interval_seconds: float = 60.0
+    mailbox: str = "INBOX"
+    allowed_senders: list[str] = field(default_factory=list)
+
+
+@dataclass
 class HeartbeatConfig:
     enabled: bool = False
     interval_seconds: float = 300.0     # 5 min default
     quiet_hours_start: int | None = None  # 0-23
     quiet_hours_end: int | None = None
+    timezone: str = ""                    # IANA tz, e.g. "America/New_York"
+    active_hours_start: int = 8           # 0-23
+    active_hours_end: int = 22            # 0-23
+    delivery_channel: str = ""            # e.g. "slack", "email"
+    owner_id: str = ""                    # recipient for autonomous results
 
 
 @dataclass
@@ -103,10 +132,12 @@ class ChannelsConfig:
     slack: SlackConfig = field(default_factory=SlackConfig)
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     whatsapp: WhatsAppConfig = field(default_factory=WhatsAppConfig)
+    email: EmailConfig = field(default_factory=EmailConfig)
     debounce_delay_ms: int = 1500
     debounce_max_wait_ms: int = 5000
     approval_timeout_seconds: float = 120.0
     approval_timeout_action: str = "reject"  # reject | approve | ignore
+    extras: dict[str, dict[str, Any]] = field(default_factory=dict)  # external channel configs
 
 
 @dataclass
@@ -121,8 +152,8 @@ class McpServerConfig:
 
 @dataclass
 class McpTemplatesConfig:
-    browser: str = "claude-in-chrome"  # "claude-in-chrome" | "playwright" | "none"
-    search: str = "tavily"  # "tavily" | "duckduckgo" | "perplexity" | "none"
+    browser: list[str] = field(default_factory=lambda: ["claude-in-chrome", "playwright"])
+    search: str = "none"  # "tavily" | "duckduckgo" | "perplexity" | "none"
 
 
 @dataclass
@@ -223,14 +254,24 @@ def load_config(config_path: Path | None = None) -> OpenHydraConfig:
             )
 
     # Parse skill sources
-    if "skills" in raw and "sources" in raw["skills"]:
-        for src_raw in raw["skills"]["sources"]:
-            config.skills.sources.append(SkillSourceConfig(
-                type=src_raw.get("type", "filesystem"),
-                path=src_raw.get("path"),
-                url=src_raw.get("url"),
-                branch=src_raw.get("branch", "main"),
-            ))
+    if "skills" in raw:
+        skills_raw = raw["skills"]
+        if "sources" in skills_raw:
+            for src_raw in skills_raw["sources"]:
+                config.skills.sources.append(SkillSourceConfig(
+                    type=src_raw.get("type", "filesystem"),
+                    path=src_raw.get("path"),
+                    url=src_raw.get("url"),
+                    branch=src_raw.get("branch", "main"),
+                ))
+        if "builder_enabled" in skills_raw:
+            config.skills.builder_enabled = skills_raw["builder_enabled"]
+        if "generated_dir" in skills_raw:
+            config.skills.generated_dir = skills_raw["generated_dir"]
+        if "max_skills_per_role" in skills_raw:
+            config.skills.max_skills_per_role = int(skills_raw["max_skills_per_role"])
+        if "builder_quality_threshold" in skills_raw:
+            config.skills.builder_quality_threshold = int(skills_raw["builder_quality_threshold"])
 
     # Parse MCP server configs
     if "tools" in raw and "mcp_servers" in raw["tools"]:
@@ -247,8 +288,12 @@ def load_config(config_path: Path | None = None) -> OpenHydraConfig:
     # Parse MCP templates config
     if "tools" in raw and "templates" in raw["tools"]:
         tpl = raw["tools"]["templates"]
+        # browser: accept str (backward compat) or list
+        browser_raw = tpl.get("browser", ["claude-in-chrome", "playwright"])
+        if isinstance(browser_raw, str):
+            browser_raw = [browser_raw] if browser_raw != "none" else []
         config.tools.templates = McpTemplatesConfig(
-            browser=tpl.get("browser", "claude-in-chrome"),
+            browser=browser_raw,
             search=tpl.get("search", "tavily"),
         )
 
@@ -308,6 +353,36 @@ def load_config(config_path: Path | None = None) -> OpenHydraConfig:
         if "approval_timeout_action" in ch_raw:
             config.channels.approval_timeout_action = ch_raw["approval_timeout_action"]
 
+        if "email" in ch_raw:
+            e = ch_raw["email"]
+            config.channels.email = EmailConfig(
+                enabled=e.get("enabled", False),
+                imap_host=_resolve_env_vars(e.get("imap_host", "")),
+                imap_port=e.get("imap_port", 993),
+                smtp_host=_resolve_env_vars(e.get("smtp_host", "")),
+                smtp_port=e.get("smtp_port", 587),
+                username=_resolve_env_vars(e.get("username", "")),
+                password=_resolve_env_vars(e.get("password", "")),
+                auth_method=e.get("auth_method", "password"),
+                oauth_client_id=_resolve_env_vars(e.get("oauth_client_id", "")),
+                oauth_client_secret=_resolve_env_vars(e.get("oauth_client_secret", "")),
+                oauth_refresh_token=_resolve_env_vars(e.get("oauth_refresh_token", "")),
+                oauth_token_uri=e.get("oauth_token_uri", "https://oauth2.googleapis.com/token"),
+                poll_interval_seconds=e.get("poll_interval_seconds", 60.0),
+                mailbox=e.get("mailbox", "INBOX"),
+                allowed_senders=e.get("allowed_senders", []),
+            )
+
+        # Parse unknown channel keys into extras (for external plugins)
+        known_keys = {
+            "slack", "discord", "whatsapp", "email",
+            "debounce_delay_ms", "debounce_max_wait_ms",
+            "approval_timeout_seconds", "approval_timeout_action",
+        }
+        for key, val in ch_raw.items():
+            if key not in known_keys and isinstance(val, dict):
+                config.channels.extras[key] = val
+
     # Parse heartbeat config
     if "heartbeat" in raw:
         hb = raw["heartbeat"]
@@ -316,6 +391,11 @@ def load_config(config_path: Path | None = None) -> OpenHydraConfig:
             interval_seconds=hb.get("interval_seconds", 300.0),
             quiet_hours_start=hb.get("quiet_hours_start"),
             quiet_hours_end=hb.get("quiet_hours_end"),
+            timezone=hb.get("timezone", ""),
+            active_hours_start=hb.get("active_hours_start", 8),
+            active_hours_end=hb.get("active_hours_end", 22),
+            delivery_channel=hb.get("delivery_channel", ""),
+            owner_id=hb.get("owner_id", ""),
         )
 
     # Environment variable overrides for channel tokens
@@ -327,6 +407,24 @@ def load_config(config_path: Path | None = None) -> OpenHydraConfig:
         config.channels.discord.bot_token = discord_token
     if wa_token := os.environ.get("OPENHYDRA_WHATSAPP_ACCESS_TOKEN"):
         config.channels.whatsapp.access_token = wa_token
+    if email_imap := os.environ.get("OPENHYDRA_EMAIL_IMAP_HOST"):
+        config.channels.email.imap_host = email_imap
+    if email_smtp := os.environ.get("OPENHYDRA_EMAIL_SMTP_HOST"):
+        config.channels.email.smtp_host = email_smtp
+    if email_user := os.environ.get("OPENHYDRA_EMAIL_USERNAME"):
+        config.channels.email.username = email_user
+    if email_pass := os.environ.get("OPENHYDRA_EMAIL_PASSWORD"):
+        config.channels.email.password = email_pass
+    if email_auth_method := os.environ.get("OPENHYDRA_EMAIL_AUTH_METHOD"):
+        config.channels.email.auth_method = email_auth_method
+    if email_oauth_id := os.environ.get("OPENHYDRA_EMAIL_OAUTH_CLIENT_ID"):
+        config.channels.email.oauth_client_id = email_oauth_id
+    if email_oauth_secret := os.environ.get("OPENHYDRA_EMAIL_OAUTH_CLIENT_SECRET"):
+        config.channels.email.oauth_client_secret = email_oauth_secret
+    if email_oauth_refresh := os.environ.get("OPENHYDRA_EMAIL_OAUTH_REFRESH_TOKEN"):
+        config.channels.email.oauth_refresh_token = email_oauth_refresh
+    if email_oauth_uri := os.environ.get("OPENHYDRA_EMAIL_OAUTH_TOKEN_URI"):
+        config.channels.email.oauth_token_uri = email_oauth_uri
 
     # Default skill source: ./skills if no sources configured
     if not config.skills.sources:

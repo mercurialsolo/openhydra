@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .agents.registry import AgentRegistry
+from .assistant import load_assistant_text
 from .config import OpenHydraConfig, load_config
 from .db import Database
 from .events import EventBus
@@ -17,9 +18,11 @@ from .memory.base import MemoryStore
 from .roles.catalog import RoleCatalog
 from .roles.executor import RoleExecutor
 from .skills.registry import SkillRegistry
+from .skills.security.pipeline import SkillSecurityPipeline
 from .tools.executor import ToolExecutor
 from .workflow.engine import WorkflowEngine
 from .workflow.mailbox import Mailbox
+from .workflow.models import StepStatus, WorkflowStatus
 from .workflow.planner import Planner
 
 logger = logging.getLogger(__name__)
@@ -32,7 +35,7 @@ class Engine:
         self.config = config or load_config()
         self.events = EventBus()
         self.agents = AgentRegistry()
-        self.skills = SkillRegistry()
+        self.skills = SkillRegistry(max_skills_per_role=self.config.skills.max_skills_per_role)
         self.memory: MemoryStore | None = None
         self.db = Database(self.config.engine.state_dir / "openhydra.db")
         self.roles = RoleCatalog()
@@ -41,6 +44,9 @@ class Engine:
         self.workflow_engine: WorkflowEngine | None = None
         self.planner: Planner | None = None
         self._tasks: dict[str, asyncio.Task] = {}
+        self._skill_pipeline: SkillSecurityPipeline | None = None
+        self.assistant_text: str = ""
+        self._connected_mcp_servers: set[str] = set()
 
     async def start(self) -> None:
         """Initialize all components and start the engine."""
@@ -53,12 +59,18 @@ class Engine:
         # Load roles from config/roles.yaml
         self._load_roles()
 
+        # Load ASSISTANT.md constitutional document
+        self.assistant_text = load_assistant_text(self.config.engine.state_dir)
+
         # Initialize memory backend
         self._init_memory()
 
         # Connect memory store if it requires async init (e.g. SQLite)
         if self.memory and hasattr(self.memory, "connect"):
             await self.memory.connect()
+
+        # Initialize skill security pipeline
+        self._init_skill_security()
 
         # Initialize skill sources
         self._init_skills()
@@ -85,6 +97,7 @@ class Engine:
             skills=self.skills,
             memory=self.memory,
             tool_executor=self.tool_executor,
+            assistant_text=self.assistant_text,
         )
 
         # Build Mailbox
@@ -108,6 +121,9 @@ class Engine:
             role_executor=self.role_executor,
             roles=self.roles,
         )
+
+        # Auto-resume any workflows interrupted by a crash
+        await self._auto_resume_workflows()
 
     async def stop(self) -> None:
         """Shut down the engine gracefully."""
@@ -162,6 +178,72 @@ class Engine:
             raise RuntimeError("Engine not started. Call start() first.")
         await self.workflow_engine.resolve_approval(approval_id, approved=False, reason=reason)
 
+    async def pause(self, workflow_id: str, paused_by: str = "") -> None:
+        """Pause a running workflow."""
+        if not self.workflow_engine:
+            raise RuntimeError("Engine not started. Call start() first.")
+        await self.workflow_engine.pause_workflow(workflow_id, paused_by=paused_by)
+
+    async def resume(self, workflow_id: str) -> str:
+        """Resume a paused workflow. Returns workflow ID."""
+        if not self.workflow_engine:
+            raise RuntimeError("Engine not started. Call start() first.")
+        task = await self.workflow_engine.resume_workflow(workflow_id)
+        self._tasks[workflow_id] = task
+        return workflow_id
+
+    async def cancel(self, workflow_id: str) -> None:
+        """Cancel a workflow."""
+        if not self.workflow_engine:
+            raise RuntimeError("Engine not started. Call start() first.")
+        await self.workflow_engine.cancel_workflow(workflow_id)
+        bg = self._tasks.pop(workflow_id, None)
+        if bg and not bg.done():
+            bg.cancel()
+
+    async def approve_skill(self, skill_id: str) -> bool:
+        """Approve a pending skill."""
+        if not self._skill_pipeline:
+            raise RuntimeError("Skill security pipeline not initialized.")
+        return await self._skill_pipeline.approve_skill(skill_id)
+
+    async def reject_skill(self, skill_id: str) -> bool:
+        """Reject a pending skill."""
+        if not self._skill_pipeline:
+            raise RuntimeError("Skill security pipeline not initialized.")
+        return await self._skill_pipeline.reject_skill(skill_id)
+
+    async def list_pending_skills(self) -> list[dict]:
+        """List skills awaiting approval."""
+        if not self._skill_pipeline:
+            return []
+        return await self._skill_pipeline.list_pending()
+
+    async def _auto_resume_workflows(self) -> None:
+        """Resume workflows that were executing when the server last stopped.
+
+        PAUSED workflows are left paused — the user chose to pause them.
+        EXECUTING workflows get their RUNNING steps reset to PENDING and re-execute.
+        """
+        cursor = await self.db.conn.execute(
+            "SELECT id FROM workflows WHERE status = ?",
+            (WorkflowStatus.EXECUTING.value,),
+        )
+        rows = await cursor.fetchall()
+        for row in rows:
+            wf_id = row["id"]
+            # Reset any RUNNING steps back to PENDING (they were interrupted)
+            await self.db.conn.execute(
+                "UPDATE steps SET status = ?, error = NULL WHERE workflow_id = ? AND status = ?",
+                (StepStatus.PENDING.value, wf_id, StepStatus.RUNNING.value),
+            )
+            await self.db.conn.commit()
+            logger.info("Auto-resuming interrupted workflow %s", wf_id)
+            bg_task = asyncio.create_task(
+                self.workflow_engine.execute_workflow(wf_id)
+            )
+            self._tasks[wf_id] = bg_task
+
     def _load_roles(self) -> None:
         """Load role definitions from config directory."""
         roles_path = Path("config") / "roles.yaml"
@@ -204,14 +286,58 @@ class Engine:
         except ImportError:
             logger.warning("scikit-learn not installed, memory disabled")
 
+    def _init_skill_security(self) -> None:
+        """Initialize skill security scanning pipeline."""
+        from .skills.security.models import RiskLevel
+
+        self._skill_pipeline = SkillSecurityPipeline(
+            db=self.db,
+            events=self.events,
+            agents=self.agents,
+            auto_approve_risk=RiskLevel.LOW,
+        )
+
     def _init_skills(self) -> None:
         """Initialize skill sources based on config."""
+        from .skills.security.secure_source import SecureSkillSource
         from .skills.sources.filesystem import FilesystemSkillSource
 
+        default_path = Path("skills")
         for source_config in self.config.skills.sources:
             if source_config.type == "filesystem":
-                path = Path(source_config.path) if source_config.path else Path("skills")
-                self.skills.add_source(FilesystemSkillSource(path))
+                path = Path(source_config.path) if source_config.path else default_path
+                fs_source = FilesystemSkillSource(path)
+
+                if self._skill_pipeline:
+                    is_bundled = path == default_path
+                    source = SecureSkillSource(
+                        fs_source, self._skill_pipeline, is_bundled=is_bundled,
+                    )
+                    self.skills.add_source(source)
+                else:
+                    self.skills.add_source(fs_source)
+
+        # Dynamic skill builder — generates skills on-the-fly via LLM
+        if self.config.skills.builder_enabled:
+            self._init_skill_builder()
+
+    def _init_skill_builder(self) -> None:
+        """Register LLM-powered skill builder as a fallback source."""
+        from .skills.builder import SkillBuilder
+
+        generated_dir = (
+            Path(self.config.skills.generated_dir)
+            if self.config.skills.generated_dir
+            else self.config.engine.state_dir / "generated_skills"
+        )
+        builder = SkillBuilder(
+            agents=self.agents,
+            output_dir=generated_dir,
+            events=self.events,
+            quality_threshold=self.config.skills.builder_quality_threshold,
+        )
+        self.skills.add_source(builder)
+        logger.info("Skill builder enabled (output: %s)", generated_dir)
 
     def _init_providers(self) -> None:
         """Register agent providers (lazy imports)."""
@@ -308,6 +434,7 @@ class Engine:
                 client = McpClient(server_config.name, transport)
                 await client.connect()
                 self.tool_executor.register_mcp_client(server_config.name, client)
+                self._connected_mcp_servers.add(server_config.name)
                 tool_count = len(client.tools)
                 logger.info(f"MCP server '{server_config.name}' connected: {tool_count} tools")
             except Exception as e:
@@ -316,8 +443,9 @@ class Engine:
     def _resolve_mcp_templates(self) -> None:
         """Resolve MCP templates into concrete McpServerConfig entries.
 
-        Reads ``config.tools.templates.browser`` and ``.search``, looks up
-        the template from the registry, checks required env vars, and
+        Reads ``config.tools.templates.browser`` (a list of fallback
+        choices) and ``.search`` (a single string), looks up each
+        template from the registry, checks required env vars, and
         appends to ``config.tools.mcp_servers`` (skipping if the user
         already explicitly configured a server with the same name).
         """
@@ -327,7 +455,12 @@ class Engine:
         existing_names = {s.name for s in self.config.tools.mcp_servers}
         templates_config = self.config.tools.templates
 
-        for choice in (templates_config.browser, templates_config.search):
+        # Collect all template names to resolve: browser list + search scalar
+        choices: list[str] = list(templates_config.browser)
+        if templates_config.search and templates_config.search != "none":
+            choices.append(templates_config.search)
+
+        for choice in choices:
             if not choice or choice == "none":
                 continue
 
@@ -362,14 +495,28 @@ class Engine:
                 args=list(template.args),
                 env=env,
             ))
+            existing_names.add(template.name)
             logger.info("Resolved MCP template: %s", template.name)
 
     def _build_mcp_config(self) -> dict[str, Any] | None:
-        """Build MCP config dict from configured servers for Claude CLI."""
+        """Build MCP config dict from connected servers for Claude CLI.
+
+        Only includes servers that successfully connected during
+        ``_init_mcp_clients()``.  This prevents child CLI processes from
+        hanging on unavailable MCP servers (e.g. claude-in-chrome when
+        the Chrome extension isn't running).
+        """
         if not self.config.tools.mcp_servers:
             return None
         servers: dict[str, Any] = {}
         for srv in self.config.tools.mcp_servers:
+            # Skip servers that failed to connect
+            if srv.name not in self._connected_mcp_servers:
+                logger.debug(
+                    "Skipping MCP server '%s' for child CLI — not connected",
+                    srv.name,
+                )
+                continue
             entry: dict[str, Any] = {}
             if srv.transport == "stdio" and srv.command:
                 entry["command"] = srv.command

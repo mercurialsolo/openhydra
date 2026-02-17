@@ -1,0 +1,1 @@
+"""Skill security scanning pipeline."""

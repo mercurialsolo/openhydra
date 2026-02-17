@@ -7,9 +7,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from openhydra.channels.session import SessionStore
+    from openhydra.channels.context import ChannelContext
     from openhydra.config import WhatsAppConfig
-    from openhydra.engine import Engine
 
 logger = logging.getLogger(__name__)
 
@@ -23,17 +22,12 @@ class WhatsAppChannel:
 
     def __init__(
         self,
-        engine: Engine,
         config: WhatsAppConfig,
-        web_channel: Any = None,
-        sessions: SessionStore | None = None,
-        debouncer: Any = None,
+        ctx: ChannelContext,
     ) -> None:
-        self._engine = engine
+        self._engine = ctx.engine
         self._config = config
-        self._web_channel = web_channel
-        self._sessions = sessions
-        self._debouncer = debouncer
+        self._ctx = ctx
         self._handlers = None
         self._bridge = None
         self._http_client = None
@@ -49,11 +43,10 @@ class WhatsAppChannel:
         else:
             await self._start_cloud_api()
 
-        # Subscribe to engine events
-        self._engine.events.on_all(self._handlers.on_engine_event)
-
     async def _start_baileys(self) -> None:
         """Start Baileys bridge backend."""
+        from openhydra.channels.access import AccessControl
+
         from .baileys import BaileysBridge
         from .handlers import WhatsAppHandlers
 
@@ -66,12 +59,14 @@ class WhatsAppChannel:
             auth_dir=auth_dir,
         )
 
+        access = AccessControl(
+            allowed_ids=self._config.allowed_phones,
+            auth_store=self._ctx.auth_store,
+            auth_manager=self._ctx.auth_manager,
+        )
+
         self._handlers = WhatsAppHandlers(
-            engine=self._engine,
-            config=self._config,
-            sessions=self._sessions,
-            debouncer=self._debouncer,
-            bridge=self._bridge,
+            self._config, self._ctx, access, bridge=self._bridge,
         )
 
         async def on_qr(data: str) -> None:
@@ -94,25 +89,32 @@ class WhatsAppChannel:
         """Start Cloud API webhook backend (legacy)."""
         import httpx
 
+        from openhydra.channels.access import AccessControl
+
         self._http_client = httpx.AsyncClient()
 
         from .handlers import WhatsAppHandlers
 
-        self._handlers = WhatsAppHandlers(
-            engine=self._engine,
-            config=self._config,
-            sessions=self._sessions,
-            debouncer=self._debouncer,
-            http_client=self._http_client,
+        access = AccessControl(
+            allowed_ids=self._config.allowed_phones,
+            auth_store=self._ctx.auth_store,
+            auth_manager=self._ctx.auth_manager,
         )
 
-        # Mount routes on web channel's Starlette app
-        if self._web_channel:
-            app = self._web_channel.app
-            if app is not None:
-                for route in self._handlers.build_routes():
-                    app.routes.append(route)
-                logger.info("WhatsApp webhook routes mounted on web server")
+        self._handlers = WhatsAppHandlers(
+            self._config, self._ctx, access, http_client=self._http_client,
+        )
+
+    def mount_routes(self, app: Any) -> None:
+        """Mount Cloud API webhook routes on a web server's Starlette app.
+
+        Called by the registry for channels implementing ``WebMountableChannel``.
+        """
+        if self._config.backend != "cloud-api" or not self._handlers:
+            return
+        for route in self._handlers.build_routes():
+            app.routes.append(route)
+        logger.info("WhatsApp webhook routes mounted on web server")
 
     async def stop(self) -> None:
         """Stop the WhatsApp channel."""

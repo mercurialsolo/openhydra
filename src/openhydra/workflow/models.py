@@ -14,6 +14,7 @@ class WorkflowStatus(str, enum.Enum):
     EXECUTING = "executing"
     WAITING_INPUT = "waiting_input"
     WAITING_APPROVAL = "waiting_approval"
+    PAUSED = "paused"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -92,3 +93,5 @@ class Workflow:
     total_tokens: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    paused_at: datetime | None = None
+    paused_by: str = ""

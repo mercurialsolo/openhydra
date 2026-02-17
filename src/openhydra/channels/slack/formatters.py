@@ -10,9 +10,14 @@ STATUS_COLORS = {
     "workflow.created": "#36a64f",
     "workflow.completed": "#36a64f",
     "workflow.failed": "#e01e5a",
+    "workflow.paused": "#daa038",
+    "workflow.resumed": "#36a64f",
+    "workflow.cancelled": "#e01e5a",
     "step.started": "#daa038",
     "step.completed": "#36a64f",
     "step.failed": "#e01e5a",
+    "step.timeout": "#e01e5a",
+    "step.progress": "#daa038",
     "approval.requested": "#4a90d9",
 }
 
@@ -59,6 +64,50 @@ def event_to_blocks(event: Event) -> list[dict[str, Any]]:
             ],
         })
 
+    # Pause + Cancel buttons on step started
+    wf_id = event.data.get("workflow_id", "")
+    if event.type == "step.started" and wf_id:
+        blocks.append({
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Pause"},
+                    "action_id": "pause_wf",
+                    "value": wf_id,
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Cancel"},
+                    "style": "danger",
+                    "action_id": "cancel_wf",
+                    "value": wf_id,
+                },
+            ],
+        })
+
+    # Resume + Cancel buttons on paused
+    if event.type == "workflow.paused" and wf_id:
+        blocks.append({
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Resume"},
+                    "style": "primary",
+                    "action_id": "resume_wf",
+                    "value": wf_id,
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Cancel"},
+                    "style": "danger",
+                    "action_id": "cancel_wf",
+                    "value": wf_id,
+                },
+            ],
+        })
+
     return blocks
 
 
@@ -81,9 +130,17 @@ def _event_header(event: Event) -> str:
         "workflow.created": f":rocket: Workflow `{wf_id}` created",
         "workflow.completed": f":white_check_mark: Workflow `{wf_id}` completed",
         "workflow.failed": f":x: Workflow `{wf_id}` failed",
+        "workflow.paused": f":double_vertical_bar: Workflow `{wf_id}` paused",
+        "workflow.resumed": f":arrow_forward: Workflow `{wf_id}` resumed",
+        "workflow.cancelled": f":octagonal_sign: Workflow `{wf_id}` cancelled",
         "step.started": f":gear: Step started — {event.data.get('role_id', '')}",
         "step.completed": f":white_check_mark: Step completed — {event.data.get('role_id', '')}",
         "step.failed": f":x: Step failed — {event.data.get('role_id', '')}",
+        "step.timeout": f":alarm_clock: Step timed out — {event.data.get('step_id', '')}",
+        "step.progress": (
+            f":bar_chart: Progress: {event.data.get('progress_pct', 0)}% "
+            f"({event.data.get('completed_steps', 0)}/{event.data.get('total_steps', 0)})"
+        ),
         "approval.requested": f":raised_hand: Approval needed for `{wf_id}`",
     }
     return labels.get(etype, f"Event: {etype}")

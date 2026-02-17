@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 
 @dataclass
@@ -55,3 +55,14 @@ class Channel(Protocol):
     async def send_message(self, user_id: str, text: str) -> None:
         """Send a message to a specific user on this channel."""
         ...
+
+
+@runtime_checkable
+class WebMountableChannel(Protocol):
+    """Channels that mount HTTP routes on the web server (e.g. WhatsApp Cloud API)."""
+
+    def mount_routes(self, app: Any) -> None: ...
+
+
+# Factory signature: (config_dict, ChannelContext) -> Channel
+ChannelFactory = Callable[[dict[str, Any], Any], "Channel"]

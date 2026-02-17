@@ -10,9 +10,14 @@ STATUS_COLORS = {
     "workflow.created": 0x36A64F,
     "workflow.completed": 0x36A64F,
     "workflow.failed": 0xE01E5A,
+    "workflow.paused": 0xDAA038,
+    "workflow.resumed": 0x36A64F,
+    "workflow.cancelled": 0xE01E5A,
     "step.started": 0xDAA038,
     "step.completed": 0x36A64F,
     "step.failed": 0xE01E5A,
+    "step.timeout": 0xE01E5A,
+    "step.progress": 0xDAA038,
     "approval.requested": 0x4A90D9,
 }
 
@@ -47,15 +52,22 @@ def event_to_text(event: Event) -> str:
 
 
 def event_to_button_labels(event: Event) -> list[dict[str, str]] | None:
-    """Return button definitions for approval events, else None."""
-    if event.type != "approval.requested":
-        return None
+    """Return button definitions for actionable events, else None."""
+    if event.type == "approval.requested":
+        approval_id = event.data.get("approval_id", "")
+        return [
+            {"label": "Approve", "custom_id": f"approve:{approval_id}", "style": "green"},
+            {"label": "Reject", "custom_id": f"reject:{approval_id}", "style": "red"},
+        ]
 
-    approval_id = event.data.get("approval_id", "")
-    return [
-        {"label": "Approve", "custom_id": f"approve:{approval_id}", "style": "green"},
-        {"label": "Reject", "custom_id": f"reject:{approval_id}", "style": "red"},
-    ]
+    wf_id = event.data.get("workflow_id", "")
+    if event.type == "workflow.paused" and wf_id:
+        return [
+            {"label": "Resume", "custom_id": f"resume:{wf_id}", "style": "green"},
+            {"label": "Cancel", "custom_id": f"cancel:{wf_id}", "style": "red"},
+        ]
+
+    return None
 
 
 def _event_title(event: Event) -> str:
@@ -65,9 +77,17 @@ def _event_title(event: Event) -> str:
         "workflow.created": f"Workflow `{wf_id}` created",
         "workflow.completed": f"Workflow `{wf_id}` completed",
         "workflow.failed": f"Workflow `{wf_id}` failed",
+        "workflow.paused": f"Workflow `{wf_id}` paused",
+        "workflow.resumed": f"Workflow `{wf_id}` resumed",
+        "workflow.cancelled": f"Workflow `{wf_id}` cancelled",
         "step.started": f"Step started — {event.data.get('role_id', '')}",
         "step.completed": f"Step completed — {event.data.get('role_id', '')}",
         "step.failed": f"Step failed — {event.data.get('role_id', '')}",
+        "step.timeout": f"Step timed out — {event.data.get('step_id', '')}",
+        "step.progress": (
+            f"Progress: {event.data.get('progress_pct', 0)}% "
+            f"({event.data.get('completed_steps', 0)}/{event.data.get('total_steps', 0)})"
+        ),
         "approval.requested": f"Approval needed for `{wf_id}`",
     }
     return titles.get(event.type, f"Event: {event.type}")

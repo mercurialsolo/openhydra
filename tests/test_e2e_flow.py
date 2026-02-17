@@ -73,12 +73,15 @@ async def test_full_submit_plan_execute_flow(tmp_path: Path) -> None:
         engine=EngineConfig(state_dir=tmp_path),
         agents=AgentsConfig(default_provider="anthropic-api"),
         memory=MemoryConfig(backend="in-memory"),
-        skills=SkillsConfig(sources=[
-            SkillSourceConfig(
-                type="filesystem",
-                path=str(Path(__file__).parent.parent / "skills"),
-            ),
-        ]),
+        skills=SkillsConfig(
+            sources=[
+                SkillSourceConfig(
+                    type="filesystem",
+                    path=str(Path(__file__).parent.parent / "skills"),
+                ),
+            ],
+            builder_enabled=False,
+        ),
     )
 
     # Mock the Anthropic client to return plan then step results
@@ -143,12 +146,15 @@ async def test_parallel_execution_flow(tmp_path: Path) -> None:
         engine=EngineConfig(state_dir=tmp_path, max_concurrent_sessions=3),
         agents=AgentsConfig(default_provider="anthropic-api"),
         memory=MemoryConfig(backend="in-memory"),
-        skills=SkillsConfig(sources=[
-            SkillSourceConfig(
-                type="filesystem",
-                path=str(Path(__file__).parent.parent / "skills"),
-            ),
-        ]),
+        skills=SkillsConfig(
+            sources=[
+                SkillSourceConfig(
+                    type="filesystem",
+                    path=str(Path(__file__).parent.parent / "skills"),
+                ),
+            ],
+            builder_enabled=False,
+        ),
     )
 
     # Plan with parallel steps: init -> (A || B) -> review
@@ -199,12 +205,15 @@ async def test_memory_persists_across_sessions(tmp_path: Path) -> None:
         engine=EngineConfig(state_dir=tmp_path),
         agents=AgentsConfig(default_provider="anthropic-api"),
         memory=MemoryConfig(backend="in-memory"),
-        skills=SkillsConfig(sources=[
-            SkillSourceConfig(
-                type="filesystem",
-                path=str(Path(__file__).parent.parent / "skills"),
-            ),
-        ]),
+        skills=SkillsConfig(
+            sources=[
+                SkillSourceConfig(
+                    type="filesystem",
+                    path=str(Path(__file__).parent.parent / "skills"),
+                ),
+            ],
+            builder_enabled=False,
+        ),
     )
 
     mock_client = AsyncMock()

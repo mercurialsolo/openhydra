@@ -11,8 +11,8 @@ from .formatters import event_to_blocks, event_to_color, event_to_text
 if TYPE_CHECKING:
     from slack_bolt.async_app import AsyncApp
 
-    from openhydra.channels.session import SessionStore
-    from openhydra.engine import Engine
+    from openhydra.channels.access import AccessControl
+    from openhydra.channels.context import ChannelContext
     from openhydra.events import Event
 
 logger = logging.getLogger(__name__)
@@ -24,26 +24,27 @@ class SlackHandlers:
     def __init__(
         self,
         bolt_app: AsyncApp,
-        engine: Engine,
-        sessions: SessionStore | None = None,
-        allowed_users: list[str] | None = None,
-        debouncer: Any = None,
+        ctx: ChannelContext,
+        access: AccessControl,
     ) -> None:
         self._app = bolt_app
-        self._engine = engine
-        self._sessions = sessions
-        self._allowed_users = allowed_users or []
-        self._debouncer = debouncer
+        self._engine = ctx.engine
+        self._sessions = ctx.sessions
+        self._debouncer = ctx.debouncer
+        self._access = access
         # Fallback in-memory map when no session store
         self._threads: dict[str, tuple[str, str]] = {}
 
-    def _is_allowed(self, user_id: str) -> bool:
-        if not self._allowed_users:
-            return True
-        return user_id in self._allowed_users
+    async def _check_access(self, user_id: str, say=None) -> bool:
+        """Check if user is allowed — delegates to AccessControl."""
+        async def notify(msg: str) -> None:
+            if say:
+                await say(msg)
+
+        return await self._access.check_and_notify("slack", user_id, notify_fn=notify)
 
     def register(self) -> None:
-        """Register all Slack event/action handlers on the bolt app."""
+        """Register all Slack event/action handlers and subscribe to engine events."""
 
         @self._app.event("app_mention")
         async def handle_mention(event: dict[str, Any], say) -> None:
@@ -69,10 +70,34 @@ class SlackHandlers:
             await self._engine.reject(approval_id, "Rejected via Slack")
             await say(f":x: Rejected `{approval_id}`")
 
+        @self._app.action("pause_wf")
+        async def handle_pause(ack, action, say) -> None:
+            await ack()
+            wf_id = action["value"]
+            await self._engine.pause(wf_id)
+            await say(f":double_vertical_bar: Paused workflow `{wf_id[:8]}`")
+
+        @self._app.action("resume_wf")
+        async def handle_resume(ack, action, say) -> None:
+            await ack()
+            wf_id = action["value"]
+            await self._engine.resume(wf_id)
+            await say(f":arrow_forward: Resumed workflow `{wf_id[:8]}`")
+
+        @self._app.action("cancel_wf")
+        async def handle_cancel(ack, action, say) -> None:
+            await ack()
+            wf_id = action["value"]
+            await self._engine.cancel(wf_id)
+            await say(f":octagonal_sign: Cancelled workflow `{wf_id[:8]}`")
+
+        # Subscribe to engine events via EventBus
+        self._engine.events.on_all(self.on_engine_event)
+
     async def _handle_task(self, event: dict[str, Any], say) -> None:
         """Parse a task from a Slack message and submit to engine."""
         user_id = event.get("user", "")
-        if not self._is_allowed(user_id):
+        if not await self._check_access(user_id, say=say):
             return
 
         text = event.get("text", "").strip()
@@ -149,7 +174,7 @@ class SlackHandlers:
             logger.exception("Failed to post Slack message for event %s", event.type)
 
         # Cleanup thread mapping when workflow finishes
-        if event.type in ("workflow.completed", "workflow.failed"):
+        if event.type in ("workflow.completed", "workflow.failed", "workflow.cancelled"):
             self._threads.pop(wf_id, None)
             if self._sessions:
                 await self._sessions.clear_workflow(wf_id)

@@ -142,6 +142,8 @@ def test_claude_sdk_receives_mcp_config() -> None:
         ]),
     )
     engine = Engine(config)
+    # Simulate successful connection so _build_mcp_config includes them
+    engine._connected_mcp_servers.update({"filesystem", "web"})
     mcp_config = engine._build_mcp_config()
 
     assert mcp_config is not None

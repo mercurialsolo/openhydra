@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from openhydra.channels.access import AccessControl
 from openhydra.channels.base import Channel
+from openhydra.channels.context import ChannelContext
 from openhydra.channels.slack.handlers import SlackHandlers
 from openhydra.events import Event, EventBus
 
@@ -17,6 +19,9 @@ class FakeEngine:
         self.submit = AsyncMock(return_value="wf-123")
         self.approve = AsyncMock()
         self.reject = AsyncMock()
+        self.pause = AsyncMock()
+        self.resume = AsyncMock(return_value="wf-123")
+        self.cancel = AsyncMock()
 
 
 class FakeBoltApp:
@@ -51,9 +56,13 @@ def bolt_app():
     return FakeBoltApp()
 
 
+def _ctx(engine=None):
+    return ChannelContext(engine=engine or FakeEngine())
+
+
 @pytest.fixture
 def handlers(bolt_app, engine):
-    h = SlackHandlers(bolt_app, engine)
+    h = SlackHandlers(bolt_app, _ctx(engine), AccessControl())
     h.register()
     return h
 
@@ -173,6 +182,59 @@ async def test_engine_event_ignored_for_unknown_workflow(bolt_app, handlers):
     bolt_app.client.chat_postMessage.assert_not_called()
 
 
+def test_handlers_register_lifecycle_actions(bolt_app, handlers):
+    assert "pause_wf" in bolt_app._action_handlers
+    assert "resume_wf" in bolt_app._action_handlers
+    assert "cancel_wf" in bolt_app._action_handlers
+
+
+@pytest.mark.asyncio
+async def test_pause_action(bolt_app, handlers, engine):
+    ack = AsyncMock()
+    say = AsyncMock()
+    action = {"value": "wf-123"}
+    handler_fn = bolt_app._action_handlers["pause_wf"][0]
+    await handler_fn(ack=ack, action=action, say=say)
+
+    ack.assert_called_once()
+    engine.pause.assert_called_once_with("wf-123")
+
+
+@pytest.mark.asyncio
+async def test_resume_action(bolt_app, handlers, engine):
+    ack = AsyncMock()
+    say = AsyncMock()
+    action = {"value": "wf-123"}
+    handler_fn = bolt_app._action_handlers["resume_wf"][0]
+    await handler_fn(ack=ack, action=action, say=say)
+
+    ack.assert_called_once()
+    engine.resume.assert_called_once_with("wf-123")
+
+
+@pytest.mark.asyncio
+async def test_cancel_action(bolt_app, handlers, engine):
+    ack = AsyncMock()
+    say = AsyncMock()
+    action = {"value": "wf-123"}
+    handler_fn = bolt_app._action_handlers["cancel_wf"][0]
+    await handler_fn(ack=ack, action=action, say=say)
+
+    ack.assert_called_once()
+    engine.cancel.assert_called_once_with("wf-123")
+
+
+@pytest.mark.asyncio
+async def test_engine_event_cleanup_on_cancel(bolt_app, handlers):
+    """Thread mapping is cleaned up when workflow is cancelled."""
+    handlers._threads["wf-123"] = ("C1", "1234.5")
+
+    event = Event(type="workflow.cancelled", data={"workflow_id": "wf-123"})
+    await handlers.on_engine_event(event)
+
+    assert "wf-123" not in handlers._threads
+
+
 def test_slack_channel_protocol_conformance():
     """SlackChannel class satisfies Channel protocol (structural check)."""
     # Can't instantiate without slack-bolt, but we can check the class itself
@@ -183,8 +245,9 @@ def test_slack_channel_protocol_conformance():
     assert hasattr(SlackChannel, "stop")
     assert hasattr(SlackChannel, "send_message")
 
-    engine = FakeEngine()
+    from openhydra.channels.context import ChannelContext
     from openhydra.config import SlackConfig
 
-    ch = SlackChannel(engine, SlackConfig())
+    ctx = ChannelContext(engine=FakeEngine())
+    ch = SlackChannel(SlackConfig(), ctx)
     assert isinstance(ch, Channel)

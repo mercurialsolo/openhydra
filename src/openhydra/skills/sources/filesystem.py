@@ -91,6 +91,7 @@ class FilesystemSkillSource:
             priority=raw.get("priority", 2),
             token_estimate=raw.get("token_estimate", 0),
             has_summary=(skill_dir / "SKILL_SUMMARY.md").exists(),
+            quality_score=raw.get("quality_score", 0),
         )
 
     async def _read_file(self, path: Path) -> str:

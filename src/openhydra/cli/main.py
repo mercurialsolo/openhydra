@@ -78,11 +78,26 @@ def status(
         try:
             if workflow_id:
                 wf = await engine.get_status(workflow_id)
+                wf_status = wf["status"]
+                wf_status_style = {
+                    "completed": "green",
+                    "executing": "yellow",
+                    "failed": "red",
+                    "cancelled": "red",
+                    "paused": "yellow",
+                    "created": "dim",
+                }.get(wf_status, "")
                 console.print(f"\n[bold]Workflow:[/bold] {wf['id']}")
-                console.print(f"[bold]Status:[/bold] {wf['status']}")
+                console.print(
+                    f"[bold]Status:[/bold] [{wf_status_style}]{wf_status}[/{wf_status_style}]"
+                )
                 console.print(f"[bold]Task:[/bold] {wf['input']}")
                 console.print(f"[bold]Cost:[/bold] ${wf['total_cost_usd']:.4f}")
                 console.print(f"[bold]Tokens:[/bold] {wf['total_tokens']}")
+                if wf.get("paused_at"):
+                    console.print(f"[bold]Paused at:[/bold] {wf['paused_at']}")
+                    if wf.get("paused_by"):
+                        console.print(f"[bold]Paused by:[/bold] {wf['paused_by']}")
 
                 if wf.get("steps"):
                     table = Table(title="Steps")
@@ -97,6 +112,7 @@ def status(
                             "running": "yellow",
                             "failed": "red",
                             "pending": "dim",
+                            "skipped": "dim",
                         }.get(step["status"], "")
                         table.add_row(
                             str(step["ordinal"]),
@@ -173,6 +189,75 @@ def reject(
             await engine.stop()
 
     _run_async(_reject())
+
+
+@app.command(name="pause")
+def pause_workflow(
+    workflow_id: str = typer.Argument(help="Workflow ID to pause"),
+) -> None:
+    """Pause a running workflow."""
+
+    async def _pause():
+        engine = await _create_engine()
+        try:
+            await engine.pause(workflow_id)
+            console.print(f"[bold yellow]Paused:[/bold yellow] {workflow_id}")
+        finally:
+            await engine.stop()
+
+    _run_async(_pause())
+
+
+@app.command(name="resume")
+def resume_workflow(
+    workflow_id: str = typer.Argument(help="Workflow ID to resume"),
+    watch: bool = typer.Option(False, "--watch", "-w", help="Stream progress events"),
+) -> None:
+    """Resume a paused workflow."""
+
+    async def _resume():
+        engine = await _create_engine()
+        try:
+            if watch:
+                from openhydra.events import Event
+
+                async def on_event(event: Event) -> None:
+                    console.print(f"  [{event.type}] {event.data}")
+
+                engine.events.on_all(on_event)
+
+            await engine.resume(workflow_id)
+            console.print(f"[bold green]Resumed:[/bold green] {workflow_id}")
+
+            if watch:
+                bg_task = engine._tasks.get(workflow_id)
+                if bg_task:
+                    await bg_task
+                    wf = await engine.get_status(workflow_id)
+                    console.print(f"\n[bold]Status:[/bold] {wf['status']}")
+                    console.print(f"[bold]Cost:[/bold] ${wf['total_cost_usd']:.4f}")
+                    console.print(f"[bold]Tokens:[/bold] {wf['total_tokens']}")
+        finally:
+            await engine.stop()
+
+    _run_async(_resume())
+
+
+@app.command(name="cancel")
+def cancel_workflow(
+    workflow_id: str = typer.Argument(help="Workflow ID to cancel"),
+) -> None:
+    """Cancel a running or paused workflow."""
+
+    async def _cancel():
+        engine = await _create_engine()
+        try:
+            await engine.cancel(workflow_id)
+            console.print(f"[bold red]Cancelled:[/bold red] {workflow_id}")
+        finally:
+            await engine.stop()
+
+    _run_async(_cancel())
 
 
 @app.command()
@@ -254,12 +339,12 @@ def serve(
             names = ", ".join(channels) or "none"
             console.print(f"[bold green]OpenHydra serving[/bold green] — channels: {names}")
 
-            # Start heartbeat if requested
+            # Start agenda runner (superset of heartbeat) if requested
             if heartbeat or cfg.heartbeat.enabled:
-                from openhydra.heartbeat.runner import HeartbeatRunner
+                from openhydra.agenda.runner import AgendaRunner
 
                 cfg.heartbeat.enabled = True
-                heartbeat_runner = HeartbeatRunner(
+                heartbeat_runner = AgendaRunner(
                     engine=engine,
                     db=engine.db,
                     config=cfg.heartbeat,
@@ -268,7 +353,7 @@ def serve(
                 )
                 await heartbeat_runner.start()
                 console.print(
-                    f"[bold green]Heartbeat enabled[/bold green] "
+                    f"[bold green]Agenda runner enabled[/bold green] "
                     f"(interval={cfg.heartbeat.interval_seconds}s)"
                 )
 
@@ -308,6 +393,209 @@ def serve(
         _run_async(_serve())
 
 
+# --- Skill review commands ---
+
+
+@app.command(name="skill-review")
+def skill_review() -> None:
+    """List skills pending security review."""
+
+    async def _review():
+        engine = await _create_engine()
+        try:
+            pending = await engine.list_pending_skills()
+            if not pending:
+                console.print("[dim]No skills pending review.[/dim]")
+                return
+
+            table = Table(title="Pending Skill Reviews")
+            table.add_column("Skill ID")
+            table.add_column("Status")
+            table.add_column("Path")
+            table.add_column("Created")
+
+            for skill in pending:
+                table.add_row(
+                    skill["skill_id"],
+                    skill["status"],
+                    skill.get("source_path", "")[:50],
+                    str(skill.get("created_at", "")),
+                )
+            console.print(table)
+        finally:
+            await engine.stop()
+
+    _run_async(_review())
+
+
+@app.command(name="skill-approve")
+def skill_approve(
+    skill_id: str = typer.Argument(help="Skill ID to approve"),
+) -> None:
+    """Approve a pending skill."""
+
+    async def _approve():
+        engine = await _create_engine()
+        try:
+            ok = await engine.approve_skill(skill_id)
+            if ok:
+                console.print(f"[bold green]Approved:[/bold green] {skill_id}")
+            else:
+                console.print(
+                    f"[bold red]Failed:[/bold red] "
+                    f"Skill '{skill_id}' not found or not pending.",
+                )
+        finally:
+            await engine.stop()
+
+    _run_async(_approve())
+
+
+@app.command(name="skill-reject")
+def skill_reject(
+    skill_id: str = typer.Argument(help="Skill ID to reject"),
+) -> None:
+    """Reject a pending skill."""
+
+    async def _reject():
+        engine = await _create_engine()
+        try:
+            ok = await engine.reject_skill(skill_id)
+            if ok:
+                console.print(f"[bold red]Rejected:[/bold red] {skill_id}")
+            else:
+                console.print(
+                    f"[bold red]Failed:[/bold red] "
+                    f"Skill '{skill_id}' not found or not pending.",
+                )
+        finally:
+            await engine.stop()
+
+    _run_async(_reject())
+
+
+# --- Auth commands ---
+
+auth_app = typer.Typer(name="auth", help="Manage channel authorization.")
+app.add_typer(auth_app)
+
+
+@auth_app.command(name="confirm")
+def auth_confirm(
+    code: str = typer.Argument(help="6-character auth code"),
+) -> None:
+    """Confirm an auth challenge code to authorize a user."""
+
+    async def _confirm():
+        engine = await _create_engine()
+        try:
+            from openhydra.channels.auth.manager import AuthManager
+            from openhydra.channels.auth.store import AuthStore
+
+            store = AuthStore(engine.db)
+            manager = AuthManager(store, engine.events)
+            ok = await manager.confirm_challenge(code)
+            if ok:
+                console.print(f"[bold green]Authorized![/bold green] Code {code} confirmed.")
+            else:
+                console.print("[bold red]Failed:[/bold red] Invalid or expired code.")
+        finally:
+            await engine.stop()
+
+    _run_async(_confirm())
+
+
+@auth_app.command(name="list")
+def auth_list() -> None:
+    """List authorized identities."""
+
+    async def _list():
+        engine = await _create_engine()
+        try:
+            from openhydra.channels.auth.store import AuthStore
+
+            store = AuthStore(engine.db)
+            identities = await store.list_identities()
+            if not identities:
+                console.print("[dim]No authorized identities.[/dim]")
+                return
+
+            table = Table(title="Authorized Identities")
+            table.add_column("Key")
+            table.add_column("Channel")
+            table.add_column("User ID")
+            table.add_column("Name")
+            table.add_column("Via")
+
+            for ident in identities:
+                table.add_row(
+                    ident.identity_key,
+                    ident.channel,
+                    ident.user_id,
+                    ident.user_name,
+                    ident.authorized_via,
+                )
+            console.print(table)
+        finally:
+            await engine.stop()
+
+    _run_async(_list())
+
+
+@auth_app.command(name="add")
+def auth_add(
+    identity: str = typer.Argument(help="Identity in channel:user_id format"),
+    name: str = typer.Option("", "--name", "-n", help="Display name"),
+) -> None:
+    """Manually authorize a user (skip challenge)."""
+
+    async def _add():
+        parts = identity.split(":", 1)
+        if len(parts) != 2:
+            console.print("[bold red]Error:[/bold red] Use format channel:user_id")
+            raise typer.Exit(1)
+
+        engine = await _create_engine()
+        try:
+            from openhydra.channels.auth.store import AuthStore
+
+            store = AuthStore(engine.db)
+            await store.authorize(parts[0], parts[1], user_name=name, via="manual")
+            console.print(f"[bold green]Authorized:[/bold green] {identity}")
+        finally:
+            await engine.stop()
+
+    _run_async(_add())
+
+
+@auth_app.command(name="revoke")
+def auth_revoke(
+    identity: str = typer.Argument(help="Identity in channel:user_id format"),
+) -> None:
+    """Revoke a user's authorization."""
+
+    async def _revoke():
+        parts = identity.split(":", 1)
+        if len(parts) != 2:
+            console.print("[bold red]Error:[/bold red] Use format channel:user_id")
+            raise typer.Exit(1)
+
+        engine = await _create_engine()
+        try:
+            from openhydra.channels.auth.store import AuthStore
+
+            store = AuthStore(engine.db)
+            revoked = await store.revoke(parts[0], parts[1])
+            if revoked:
+                console.print(f"[bold red]Revoked:[/bold red] {identity}")
+            else:
+                console.print(f"[bold red]Not found:[/bold red] {identity}")
+        finally:
+            await engine.stop()
+
+    _run_async(_revoke())
+
+
 @app.command()
 def config() -> None:
     """Show current configuration."""
@@ -326,6 +614,9 @@ def config() -> None:
     console.print("\n[bold]Skills[/bold]")
     for src in cfg.skills.sources:
         console.print(f"  Source: {src.type} ({src.path or src.url})")
+    console.print(f"  Builder enabled: {cfg.skills.builder_enabled}")
+    console.print(f"  Max skills per role: {cfg.skills.max_skills_per_role}")
+    console.print(f"  Builder quality threshold: {cfg.skills.builder_quality_threshold}")
     if cfg.tools.mcp_servers:
         console.print("\n[bold]MCP Servers[/bold]")
         for srv in cfg.tools.mcp_servers:

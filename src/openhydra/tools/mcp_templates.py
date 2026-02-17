@@ -40,6 +40,21 @@ ALL_TEMPLATES: list[McpTemplate] = [
         args=["@playwright/mcp@latest"],
         description="Headless browser automation via Playwright",
     ),
+    McpTemplate(
+        name="puppeteer",
+        category="browser",
+        command="npx",
+        args=["@modelcontextprotocol/server-puppeteer"],
+        description="Browser automation via Puppeteer (headless Chrome)",
+    ),
+    McpTemplate(
+        name="browserbase",
+        category="browser",
+        command="npx",
+        args=["@browserbasehq/mcp-server-browserbase"],
+        env_keys=["BROWSERBASE_API_KEY", "BROWSERBASE_PROJECT_ID"],
+        description="Cloud browser automation via Browserbase + Stagehand",
+    ),
     # --- Search ---
     McpTemplate(
         name="tavily",
@@ -47,8 +62,7 @@ ALL_TEMPLATES: list[McpTemplate] = [
         command="npx",
         args=["tavily-mcp@0.1.2"],
         env_keys=["TAVILY_API_KEY"],
-        description="Web search via Tavily API",
-        default=True,
+        description="Web search via Tavily API (opt-in; Claude CLI has WebSearch built-in)",
     ),
     McpTemplate(
         name="duckduckgo",

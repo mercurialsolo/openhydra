@@ -153,6 +153,7 @@ def test_ensure_api_key_preserves_existing_config(tmp_path, monkeypatch):
 
 def test_web_channel_passes_api_key():
     """WebChannel passes api_key from config to WebSocketManager."""
+    from openhydra.channels.context import ChannelContext
     from openhydra.channels.web.server import WebChannel
     from openhydra.config import WebConfig
 
@@ -160,6 +161,6 @@ def test_web_channel_passes_api_key():
         def __init__(self):
             self.events = EventBus()
 
-    engine = FakeEngine()
-    ch = WebChannel(engine, WebConfig(api_key="test-key"))
+    ctx = ChannelContext(engine=FakeEngine())
+    ch = WebChannel(WebConfig(api_key="test-key"), ctx)
     assert ch._ws_manager._api_key == "test-key"

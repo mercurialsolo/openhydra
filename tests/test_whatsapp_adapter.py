@@ -8,7 +8,9 @@ import pytest
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
+from openhydra.channels.access import AccessControl
 from openhydra.channels.base import Channel
+from openhydra.channels.context import ChannelContext
 from openhydra.channels.whatsapp.adapter import WhatsAppChannel
 from openhydra.channels.whatsapp.formatters import event_to_text
 from openhydra.channels.whatsapp.handlers import WhatsAppHandlers
@@ -22,6 +24,9 @@ class FakeEngine:
         self.submit = AsyncMock(return_value="wf-123")
         self.approve = AsyncMock()
         self.reject = AsyncMock()
+        self.pause = AsyncMock()
+        self.resume = AsyncMock(return_value="wf-123")
+        self.cancel = AsyncMock()
 
 
 @pytest.fixture
@@ -48,9 +53,13 @@ def http_client():
     return client
 
 
+def _ctx(engine=None):
+    return ChannelContext(engine=engine or FakeEngine())
+
+
 @pytest.fixture
 def handlers(engine, wa_config, http_client):
-    return WhatsAppHandlers(engine, wa_config, http_client=http_client)
+    return WhatsAppHandlers(wa_config, _ctx(engine), AccessControl(), http_client=http_client)
 
 
 @pytest.fixture
@@ -145,6 +154,48 @@ def test_reject_command(client, engine, handlers, http_client):
     engine.reject.assert_called_once_with("wf-123", "bad output")
 
 
+def test_pause_command(client, engine, handlers, http_client):
+    handlers._conversations["+1234567890"] = "wf-123"
+
+    resp = client.post(
+        "/webhooks/whatsapp",
+        json=_make_webhook_payload("+1234567890", "pause"),
+    )
+    assert resp.status_code == 200
+    engine.pause.assert_called_once_with("wf-123")
+
+
+def test_resume_command(client, engine, handlers, http_client):
+    handlers._conversations["+1234567890"] = "wf-123"
+
+    resp = client.post(
+        "/webhooks/whatsapp",
+        json=_make_webhook_payload("+1234567890", "resume"),
+    )
+    assert resp.status_code == 200
+    engine.resume.assert_called_once_with("wf-123")
+
+
+def test_cancel_command(client, engine, handlers, http_client):
+    handlers._conversations["+1234567890"] = "wf-123"
+
+    resp = client.post(
+        "/webhooks/whatsapp",
+        json=_make_webhook_payload("+1234567890", "cancel"),
+    )
+    assert resp.status_code == 200
+    engine.cancel.assert_called_once_with("wf-123")
+
+
+def test_pause_no_active_workflow(client, engine, http_client):
+    resp = client.post(
+        "/webhooks/whatsapp",
+        json=_make_webhook_payload("+1234567890", "pause"),
+    )
+    assert resp.status_code == 200
+    engine.pause.assert_not_called()
+
+
 def test_approve_no_active_workflow(client, engine, http_client):
     resp = client.post(
         "/webhooks/whatsapp",
@@ -193,6 +244,16 @@ async def test_engine_event_ignored_for_unknown_workflow(handlers, http_client):
     http_client.post.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_engine_event_cleanup_on_cancel(handlers, http_client):
+    handlers._conversations["+1234567890"] = "wf-123"
+
+    event = Event(type="workflow.cancelled", data={"workflow_id": "wf-123"})
+    await handlers.on_engine_event(event)
+
+    assert "+1234567890" not in handlers._conversations
+
+
 # --- Formatters ---
 
 
@@ -222,30 +283,36 @@ def test_event_to_text_unknown():
 
 
 def test_whatsapp_channel_satisfies_protocol():
-    engine = FakeEngine()
-    ch = WhatsAppChannel(engine, WhatsAppConfig())
+    from openhydra.channels.context import ChannelContext
+
+    ctx = ChannelContext(engine=FakeEngine())
+    ch = WhatsAppChannel(WhatsAppConfig(), ctx)
     assert isinstance(ch, Channel)
 
 
 def test_whatsapp_channel_name():
-    engine = FakeEngine()
-    ch = WhatsAppChannel(engine, WhatsAppConfig())
+    from openhydra.channels.context import ChannelContext
+
+    ctx = ChannelContext(engine=FakeEngine())
+    ch = WhatsAppChannel(WhatsAppConfig(), ctx)
     assert ch.name == "whatsapp"
 
 
 @pytest.mark.asyncio
 async def test_stop_without_start():
-    engine = FakeEngine()
-    ch = WhatsAppChannel(engine, WhatsAppConfig())
+    from openhydra.channels.context import ChannelContext
+
+    ctx = ChannelContext(engine=FakeEngine())
+    ch = WhatsAppChannel(WhatsAppConfig(), ctx)
     await ch.stop()  # Should not raise
 
 
 @pytest.mark.asyncio
 async def test_start_cloud_api_mounts_routes():
+    from openhydra.channels.context import ChannelContext
+
     engine = FakeEngine()
-    web_channel = MagicMock()
     web_app = Starlette(routes=[])
-    web_channel.app = web_app
     config = WhatsAppConfig(
         enabled=True,
         backend="cloud-api",
@@ -254,10 +321,12 @@ async def test_start_cloud_api_mounts_routes():
         verify_token="v",
     )
 
-    ch = WhatsAppChannel(engine, config, web_channel=web_channel)
+    ctx = ChannelContext(engine=engine)
+    ch = WhatsAppChannel(config, ctx)
     await ch.start()
 
-    # Routes should have been added
+    # mount_routes adds webhook endpoints
+    ch.mount_routes(web_app)
     paths = [r.path for r in web_app.routes]
     assert "/webhooks/whatsapp" in paths
 

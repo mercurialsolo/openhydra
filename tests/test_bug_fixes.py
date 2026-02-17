@@ -45,6 +45,8 @@ def test_build_mcp_config_stdio() -> None:
         ]),
     )
     engine = Engine(config)
+    # Simulate successful connection so _build_mcp_config includes it
+    engine._connected_mcp_servers.add("test-server")
     mcp_config = engine._build_mcp_config()
 
     assert mcp_config is not None
@@ -62,3 +64,34 @@ def test_build_mcp_config_empty() -> None:
     config = OpenHydraConfig()
     engine = Engine(config)
     assert engine._build_mcp_config() is None
+
+
+def test_build_mcp_config_excludes_disconnected() -> None:
+    """Only connected MCP servers are included in child CLI config."""
+    from openhydra.engine import Engine
+
+    config = OpenHydraConfig(
+        tools=ToolsConfig(mcp_servers=[
+            McpServerConfig(
+                name="connected-server",
+                transport="stdio",
+                command="node",
+                args=["ok.js"],
+            ),
+            McpServerConfig(
+                name="failed-server",
+                transport="stdio",
+                command="node",
+                args=["fail.js"],
+            ),
+        ]),
+    )
+    engine = Engine(config)
+    # Only one server connected
+    engine._connected_mcp_servers.add("connected-server")
+    mcp_config = engine._build_mcp_config()
+
+    assert mcp_config is not None
+    servers = mcp_config["mcpServers"]
+    assert "connected-server" in servers
+    assert "failed-server" not in servers

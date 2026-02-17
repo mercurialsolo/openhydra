@@ -25,7 +25,7 @@ from openhydra.tools.mcp_templates import (
 
 
 def test_all_templates_not_empty():
-    assert len(ALL_TEMPLATES) >= 5
+    assert len(ALL_TEMPLATES) >= 7
 
 
 def test_get_template_by_name():
@@ -43,12 +43,13 @@ def test_get_default_templates():
     defaults = get_default_templates()
     names = {t.name for t in defaults}
     assert "claude-in-chrome" in names
-    assert "tavily" in names
+    # tavily is opt-in (Claude CLI has WebSearch built-in)
+    assert "tavily" not in names
 
 
 def test_get_templates_by_category():
     browsers = get_templates_by_category("browser")
-    assert len(browsers) >= 2
+    assert len(browsers) >= 4
     for t in browsers:
         assert t.category == "browser"
 
@@ -82,8 +83,8 @@ def test_no_env_keys_on_duckduckgo():
 
 def test_templates_config_defaults():
     cfg = McpTemplatesConfig()
-    assert cfg.browser == "claude-in-chrome"
-    assert cfg.search == "tavily"
+    assert cfg.browser == ["claude-in-chrome", "playwright"]
+    assert cfg.search == "none"  # Claude CLI has WebSearch built-in
 
 
 def test_tools_config_has_templates():
@@ -97,13 +98,13 @@ def test_load_config_parses_templates(tmp_path):
     config_file.write_text(yaml.safe_dump({
         "tools": {
             "templates": {
-                "browser": "playwright",
+                "browser": ["playwright", "puppeteer"],
                 "search": "duckduckgo",
             }
         }
     }))
     cfg = load_config(config_file)
-    assert cfg.tools.templates.browser == "playwright"
+    assert cfg.tools.templates.browser == ["playwright", "puppeteer"]
     assert cfg.tools.templates.search == "duckduckgo"
 
 
@@ -120,7 +121,7 @@ def test_resolve_mcp_templates_adds_servers(monkeypatch):
 
     config = OpenHydraConfig()
     config.tools.templates = McpTemplatesConfig(
-        browser="playwright", search="tavily",
+        browser=["playwright"], search="tavily",
     )
     engine = Engine.__new__(Engine)
     engine.config = config
@@ -140,12 +141,12 @@ def test_resolve_mcp_templates_adds_servers(monkeypatch):
 
 
 def test_resolve_skips_none_template():
-    """'none' means skip that category."""
+    """Empty browser list and 'none' search means no servers."""
     from openhydra.engine import Engine
 
     config = OpenHydraConfig()
     config.tools.templates = McpTemplatesConfig(
-        browser="none", search="none",
+        browser=[], search="none",
     )
     engine = Engine.__new__(Engine)
     engine.config = config
@@ -163,7 +164,7 @@ def test_resolve_skips_missing_env(monkeypatch):
 
     config = OpenHydraConfig()
     config.tools.templates = McpTemplatesConfig(
-        browser="none", search="tavily",
+        browser=[], search="tavily",
     )
     engine = Engine.__new__(Engine)
     engine.config = config
@@ -180,7 +181,7 @@ def test_resolve_skips_duplicate():
 
     config = OpenHydraConfig()
     config.tools.templates = McpTemplatesConfig(
-        browser="playwright", search="none",
+        browser=["playwright"], search="none",
     )
     config.tools.mcp_servers = [
         McpServerConfig(name="playwright", command="custom-playwright"),
@@ -283,3 +284,76 @@ def test_detect_providers():
     # Values are booleans
     for v in providers.values():
         assert isinstance(v, bool)
+
+
+# ---------------------------------------------------------------------------
+# Browser fallback chain
+# ---------------------------------------------------------------------------
+
+
+def test_puppeteer_template_exists():
+    t = get_template("puppeteer")
+    assert t is not None
+    assert t.category == "browser"
+    assert t.env_keys == []
+
+
+def test_browserbase_template_exists():
+    t = get_template("browserbase")
+    assert t is not None
+    assert t.category == "browser"
+    assert "BROWSERBASE_API_KEY" in t.env_keys
+    assert "BROWSERBASE_PROJECT_ID" in t.env_keys
+
+
+def test_load_config_browser_str_backward_compat(tmp_path):
+    """A scalar string browser value is coerced to a single-element list."""
+    config_file = tmp_path / ".openhydra" / "openhydra.yaml"
+    config_file.parent.mkdir(parents=True)
+    config_file.write_text(yaml.safe_dump({
+        "tools": {
+            "templates": {
+                "browser": "playwright",
+                "search": "none",
+            }
+        }
+    }))
+    cfg = load_config(config_file)
+    assert cfg.tools.templates.browser == ["playwright"]
+
+
+def test_load_config_browser_none_str(tmp_path):
+    """browser: 'none' is coerced to an empty list."""
+    config_file = tmp_path / ".openhydra" / "openhydra.yaml"
+    config_file.parent.mkdir(parents=True)
+    config_file.write_text(yaml.safe_dump({
+        "tools": {
+            "templates": {
+                "browser": "none",
+                "search": "none",
+            }
+        }
+    }))
+    cfg = load_config(config_file)
+    assert cfg.tools.templates.browser == []
+
+
+def test_resolve_browser_list_multiple_servers():
+    """Browser list with multiple entries resolves all of them."""
+    from openhydra.engine import Engine
+
+    config = OpenHydraConfig()
+    config.tools.templates = McpTemplatesConfig(
+        browser=["claude-in-chrome", "playwright", "puppeteer"],
+        search="none",
+    )
+    engine = Engine.__new__(Engine)
+    engine.config = config
+
+    engine._resolve_mcp_templates()
+
+    names = [s.name for s in config.tools.mcp_servers]
+    assert "claude-in-chrome" in names
+    assert "playwright" in names
+    assert "puppeteer" in names
+    assert len(names) == 3

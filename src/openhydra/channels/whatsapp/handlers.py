@@ -11,10 +11,10 @@ from .formatters import event_to_text
 if TYPE_CHECKING:
     import httpx
 
-    from openhydra.channels.session import SessionStore
+    from openhydra.channels.access import AccessControl
+    from openhydra.channels.context import ChannelContext
     from openhydra.channels.whatsapp.baileys import BaileysBridge
     from openhydra.config import WhatsAppConfig
-    from openhydra.engine import Engine
     from openhydra.events import Event
 
 logger = logging.getLogger(__name__)
@@ -27,26 +27,31 @@ class WhatsAppHandlers:
 
     def __init__(
         self,
-        engine: Engine,
         config: WhatsAppConfig,
-        sessions: SessionStore | None = None,
-        debouncer: Any = None,
+        ctx: ChannelContext,
+        access: AccessControl,
         bridge: BaileysBridge | None = None,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._engine = engine
+        self._engine = ctx.engine
         self._config = config
-        self._sessions = sessions
-        self._debouncer = debouncer
+        self._sessions = ctx.sessions
+        self._debouncer = ctx.debouncer
         self._bridge = bridge
         self._http = http_client
+        self._access = access
         # Fallback in-memory map when no session store
         self._conversations: dict[str, str] = {}
 
-    def _is_allowed(self, phone: str) -> bool:
-        if not self._config.allowed_phones:
-            return True
-        return phone in self._config.allowed_phones
+        # Subscribe to engine events via EventBus
+        self._engine.events.on_all(self.on_engine_event)
+
+    async def _check_access(self, phone: str) -> bool:
+        """Check if phone is allowed — delegates to AccessControl."""
+        async def notify(msg: str) -> None:
+            await self.send_message(phone, msg)
+
+        return await self._access.check_and_notify("whatsapp", phone, notify_fn=notify)
 
     def build_routes(self) -> list:
         """Build Starlette routes for Cloud API webhooks."""
@@ -90,7 +95,7 @@ class WhatsAppHandlers:
 
     async def on_message(self, phone: str, text: str) -> None:
         """Process an inbound message — submit task or handle approval."""
-        if not self._is_allowed(phone):
+        if not await self._check_access(phone):
             return
 
         text_lower = text.strip().lower()
@@ -121,6 +126,45 @@ class WhatsAppHandlers:
                 await self.send_message(phone, "Rejected.")
             else:
                 await self.send_message(phone, "No active workflow to reject.")
+            return
+
+        if text_lower == "pause":
+            wf_id = self._conversations.get(phone)
+            if not wf_id and self._sessions:
+                session = await self._sessions.get(f"whatsapp:{phone}")
+                if session:
+                    wf_id = session.active_workflow_id
+            if wf_id:
+                await self._engine.pause(wf_id)
+                await self.send_message(phone, "Paused.")
+            else:
+                await self.send_message(phone, "No active workflow to pause.")
+            return
+
+        if text_lower == "resume":
+            wf_id = self._conversations.get(phone)
+            if not wf_id and self._sessions:
+                session = await self._sessions.get(f"whatsapp:{phone}")
+                if session:
+                    wf_id = session.active_workflow_id
+            if wf_id:
+                await self._engine.resume(wf_id)
+                await self.send_message(phone, "Resumed.")
+            else:
+                await self.send_message(phone, "No active workflow to resume.")
+            return
+
+        if text_lower == "cancel":
+            wf_id = self._conversations.get(phone)
+            if not wf_id and self._sessions:
+                session = await self._sessions.get(f"whatsapp:{phone}")
+                if session:
+                    wf_id = session.active_workflow_id
+            if wf_id:
+                await self._engine.cancel(wf_id)
+                await self.send_message(phone, "Cancelled.")
+            else:
+                await self.send_message(phone, "No active workflow to cancel.")
             return
 
         # Debounce if configured
@@ -199,7 +243,7 @@ class WhatsAppHandlers:
         await self.send_message(phone, text)
 
         # Cleanup when workflow finishes
-        if event.type in ("workflow.completed", "workflow.failed"):
+        if event.type in ("workflow.completed", "workflow.failed", "workflow.cancelled"):
             self._conversations.pop(phone, None)
             if self._sessions:
                 await self._sessions.clear_workflow(wf_id)

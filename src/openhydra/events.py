@@ -25,10 +25,14 @@ WORKFLOW_EXECUTING = "workflow.executing"
 WORKFLOW_COMPLETED = "workflow.completed"
 WORKFLOW_FAILED = "workflow.failed"
 WORKFLOW_WAITING = "workflow.waiting"
+WORKFLOW_PAUSED = "workflow.paused"
+WORKFLOW_RESUMED = "workflow.resumed"
+WORKFLOW_CANCELLED = "workflow.cancelled"
 STEP_STARTED = "step.started"
 STEP_PROGRESS = "step.progress"
 STEP_COMPLETED = "step.completed"
 STEP_FAILED = "step.failed"
+STEP_TIMEOUT = "step.timeout"
 APPROVAL_REQUESTED = "approval.requested"
 APPROVAL_RESOLVED = "approval.resolved"
 MEMORY_STORED = "memory.stored"
@@ -36,6 +40,18 @@ COST_UPDATED = "cost.updated"
 ARTIFACT_CREATED = "artifact.created"
 ARTIFACT_MODIFIED = "artifact.modified"
 MESSAGE_SENT = "message.sent"
+
+# Skill security events
+SKILL_REVIEW_STARTED = "skill.review_started"
+SKILL_APPROVAL_NEEDED = "skill.approval_needed"
+SKILL_APPROVED = "skill.approved"
+SKILL_REJECTED = "skill.rejected"
+SKILL_GENERATION_REJECTED = "skill.generation_rejected"
+
+# Channel authorization events
+AUTH_CHALLENGE_CREATED = "auth.challenge_created"
+AUTH_IDENTITY_AUTHORIZED = "auth.identity_authorized"
+AUTH_IDENTITY_REVOKED = "auth.identity_revoked"
 
 EventHandler = Callable[[Event], Coroutine[Any, Any, None]]
 

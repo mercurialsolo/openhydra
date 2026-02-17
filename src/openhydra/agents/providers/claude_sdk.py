@@ -145,7 +145,21 @@ class ClaudeSdkProvider:
                 model=model,
             )
 
-        return self._parse_output(stdout.decode(), model, duration)
+        raw_stdout = stdout.decode().strip()
+        if not raw_stdout:
+            error_msg = "Claude CLI returned empty output"
+            stderr_text = stderr.decode().strip() if stderr else ""
+            if stderr_text:
+                error_msg += f": {stderr_text[:200]}"
+            logger.warning(error_msg)
+            return SessionResult(
+                output={"error": error_msg},
+                raw_text=error_msg,
+                duration_seconds=duration,
+                model=model,
+            )
+
+        return self._parse_output(raw_stdout, model, duration)
 
     async def check_availability(self) -> bool:
         try:
