@@ -48,51 +48,9 @@ uv run openhydra doctor
 uv run openhydra doctor --strict
 ```
 
-## What It Does
-
-OpenHydra takes a task description and executes it through a pipeline of specialized AI agents — each with its own role, tools, skills, and quality gates. Think of it as a lightweight version of a multi-agent system that runs entirely on your laptop.
-
-```bash
-openhydra run "Build a Python CLI that converts CSV to JSON"
-```
-
-This will:
-1. **Plan** — Analyze the task and compose a step-by-step execution plan
-2. **Execute** — Run each step with the right agent role (engineer, tester, reviewer)
-3. **Gate** — Check quality between steps, ask for human input when needed
-4. **Deliver** — Produce the final artifacts in your project directory
-
-## What Tasks Can OpenHydra Help You Do?
-
-OpenHydra is strongest on tasks that need coordination across multiple steps, roles, and checks.
-You describe the outcome, and it builds the execution plan at submit time.
-
-Examples of plan-heavy tasks:
-
-- **Feature delivery from idea to tested code**
-  - `"Add OAuth login with Google and GitHub, wire session handling, and add tests"`
-- **Complex refactors with safety checks**
-  - `"Migrate this Flask API to FastAPI without breaking existing endpoints"`
-- **Bug investigation + regression prevention**
-  - `"Find and fix the intermittent checkout timeout and add regression coverage"`
-- **Product-to-engineering handoff in one run**
-  - `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
-- **Cross-cutting upgrades**
-  - `"Upgrade to Pydantic v2, fix breaking changes, and verify CLI behavior"`
-- **Research briefs with traceable sources**
-  - `"Compare open-source eval frameworks for LLM apps, rank tradeoffs, and produce a recommendation memo with links"`
-- **Security and dependency maintenance**
-  - `"Audit dependencies for known CVEs, propose a prioritized remediation plan, and patch low-risk updates with tests"`
-- **CI and quality maintenance**
-  - `"Analyze flaky tests from the last 30 runs, identify root causes, and produce a stabilization plan with quick wins"`
-- **Backlog and issue triage**
-  - `"Review open GitHub issues, cluster duplicates/themes, and propose a prioritized execution plan for this sprint"`
-- **Ongoing project operations**
-  - `"Create a weekly maintenance report covering test health, dependency drift, and release readiness with actionable next steps"`
-
 ## Planning On The Fly (No Manual Plan File)
 
-You do not need to write a plan first. Submit the task directly:
+You do not need to write a plan first. Submit the outcome directly:
 
 ```bash
 uv run openhydra run "Migrate this Flask API to FastAPI without breaking existing endpoints" --watch
@@ -118,6 +76,25 @@ To inspect the generated plan and step-by-step progress:
 ```bash
 uv run openhydra status <workflow_id>
 ```
+
+## What OpenHydra Helps You Achieve
+
+OpenHydra is strongest for work that needs:
+
+- multi-step planning with dependencies, checks, and retries
+- coordination across multiple tools (code, tests, browser/search, channels)
+- runtime selection of the right role, tools, and skills instead of one fixed script
+
+Examples:
+
+- `"Add OAuth login with Google and GitHub, wire session handling, and add tests"`
+- `"Migrate this Flask API to FastAPI without breaking existing endpoints"`
+- `"Find and fix the intermittent checkout timeout and add regression coverage"`
+- `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
+- `"Compare open-source eval frameworks for LLM apps, rank tradeoffs, and produce a recommendation memo with links"`
+- `"Audit dependencies for known CVEs, patch low-risk updates, and verify with tests"`
+- `"Review open GitHub issues, cluster duplicates/themes, and propose a prioritized sprint plan"`
+- `"Create a weekly maintenance report covering test health, dependency drift, and release readiness"`
 
 ## Talk To OpenHydra Agents From Any Channel
 
