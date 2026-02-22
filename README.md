@@ -33,6 +33,9 @@ uv run openhydra agent scaffold eng.docs --description "Writes implementation do
 uv run openhydra agent scaffold --interactive
 ```
 
+Need full setup and configuration details (all settings, env vars, and customization points)?
+See [SETUP.md](SETUP.md).
+
 ### Setup Doctor
 
 Validate your local runtime, default provider, and enabled channel prerequisites:
@@ -145,6 +148,9 @@ See `CONTRIBUTING.md` for the contributor workflow, checks, and PR requirements.
 
 ## Configuration
 
+For the complete setup and configuration reference (all categories, env vars, and customization),
+see [SETUP.md](SETUP.md).
+
 OpenHydra loads config in this order:
 1. `.openhydra/openhydra.yaml` (project-local)
 2. `~/.openhydra/openhydra.yaml` (user-global)
@@ -249,6 +255,7 @@ Enable with `builder_enabled: true` if you want on-the-fly generation.
 ## Documentation
 
 - [README.md](README.md) — install, run, core configuration, and channel setup.
+- [SETUP.md](SETUP.md) — comprehensive setup, configuration categories, env vars, and customization.
 - [SPEC.md](SPEC.md) — architecture, protocols, and extension APIs.
 - [PLAN.md](PLAN.md) — implementation roadmap and phase status.
 - [CLAUDE.md](CLAUDE.md) — maintainer conventions and project notes.
