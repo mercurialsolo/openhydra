@@ -82,7 +82,7 @@ uv run openhydra status <workflow_id>
 OpenHydra is strongest for work that needs:
 
 - multi-step planning with dependencies, checks, and retries
-- coordination across multiple tools (code, tests, browser/search, channels)
+- coordination across multiple tools (code, tests, docs, browser/search, channels)
 - runtime selection of the right role, tools, and skills instead of one fixed script
 
 Examples:
@@ -95,6 +95,14 @@ Examples:
 - `"Audit dependencies for known CVEs, patch low-risk updates, and verify with tests"`
 - `"Review open GitHub issues, cluster duplicates/themes, and propose a prioritized sprint plan"`
 - `"Create a weekly maintenance report covering test health, dependency drift, and release readiness"`
+- `"Turn customer interviews and support tickets into a prioritized product roadmap with milestones and risks"`
+- `"Define v1 scope for a customer portal, set success metrics, and sequence a cross-functional launch timeline"`
+- `"Research competitors in the US billing software market, compare pricing/positioning, and produce a GTM brief with sources"`
+- `"Analyze customer feedback across support channels, cluster churn drivers, and propose top retention experiments"`
+- `"Build a 90-day operating plan (product, hiring, partnerships) with weekly checkpoints and risk tracking"`
+- `"Coordinate a multi-city business trip with budget/time constraints and produce an actionable day-by-day itinerary"`
+- `"Map legal/compliance considerations for launching an AI feature, summarize risk areas, and draft counsel questions"`
+- `"Assess economic and regulatory opportunity across target regions and recommend where to expand next quarter"`
 
 ## Talk To OpenHydra Agents From Any Channel
 
