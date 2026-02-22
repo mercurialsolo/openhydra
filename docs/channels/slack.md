@@ -14,16 +14,24 @@ uv pip install -e ".[slack]"
 ## Step 1: Create and Configure a Slack App
 
 1. Create a new app in your Slack workspace.
-2. Enable **Socket Mode** for the app.
-3. Create an app-level token with `connections:write` scope (`xapp-...`).
-4. Under **OAuth & Permissions**, add bot token scopes:
+2. Create an app-level token with `connections:write` scope (`xapp-...`).
+3. Enable **Socket Mode** for the app.
+4. In **App Home**, enable the **Messages Tab** so users can DM the bot.
+5. In **Event Subscriptions**, enable events and subscribe to bot events:
+   - `app_mention`
+   - `message.im`
+6. Under **OAuth & Permissions**, add bot token scopes:
    - `app_mentions:read`
-   - `channels:history`
-   - `groups:history`
    - `im:history`
-   - `mpim:history`
    - `chat:write`
-5. Install/reinstall the app to workspace and copy the bot token (`xoxb-...`).
+7. Install/reinstall the app to workspace and copy the bot token (`xoxb-...`).
+
+Notes:
+
+1. The scope/event set above is the minimum for OpenHydra's default Slack behavior
+   (DMs + `@mention` tasks).
+2. `channels:history`, `groups:history`, and `mpim:history` are not required unless you
+   explicitly extend your app to consume those message event types.
 
 ## Step 2: Set Required Environment Variables
 

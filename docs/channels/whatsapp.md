@@ -1,13 +1,6 @@
-# WhatsApp Setup (Baileys or Cloud API)
+# WhatsApp Setup
 
 Use this guide to connect OpenHydra to WhatsApp.
-
-OpenHydra supports two backends:
-
-1. **Baileys**: local WhatsApp Web session via QR login.
-2. **Cloud API**: Meta webhook/API integration.
-
-## Option A: Baileys (Local QR Login)
 
 ### Prerequisites
 
@@ -19,7 +12,7 @@ OpenHydra supports two backends:
 uv pip install -e ".[whatsapp]"
 ```
 
-### Step 1: Enable WhatsApp Baileys in Config
+### Step 1: Enable WhatsApp in Config
 
 Edit `.openhydra/openhydra.yaml` or `~/.openhydra/openhydra.yaml`:
 
@@ -27,7 +20,6 @@ Edit `.openhydra/openhydra.yaml` or `~/.openhydra/openhydra.yaml`:
 channels:
   whatsapp:
     enabled: true
-    backend: "baileys"
     auth_dir: "~/.openhydra/whatsapp_auth"
     allowed_phones: []  # optional allowlist; empty means allow all
 ```
@@ -35,26 +27,22 @@ channels:
 Notes:
 
 1. `auth_dir` defaults to `~/.openhydra/whatsapp_auth` if omitted.
-2. On first `openhydra serve`, OpenHydra auto-installs `@whiskeysockets/baileys` (requires npm).
+2. On first `openhydra serve`, OpenHydra auto-installs the required WhatsApp bridge dependency
+   (requires npm).
 
-### Step 2: Start OpenHydra
+### Step 2: Validate and Start OpenHydra
 
 ```bash
+# Optional preflight (recommended): validate config/dependencies first.
 uv run openhydra doctor --strict
 uv run openhydra serve
 ```
 
 ### Step 3: Pair WhatsApp
 
-1. Run `uv run openhydra serve`.
+1. Keep `uv run openhydra serve` running.
 2. OpenHydra prints the pairing QR directly in your terminal.
 3. Scan that QR from WhatsApp on your phone.
-
-Fallback (only if terminal QR rendering is unavailable):
-
-1. Subscribe to `/api/v1/ws`.
-2. Watch for event `whatsapp.qr`.
-3. Render `data.qr_data` externally as a QR code.
 
 ### Step 4: Verify
 
@@ -68,60 +56,6 @@ Supported control commands in chat:
 3. `pause`
 4. `resume`
 5. `cancel`
-
-## Option B: Cloud API (Meta)
-
-### Prerequisites
-
-1. Meta WhatsApp Cloud API setup with phone number.
-2. Public HTTPS endpoint for webhooks.
-3. OpenHydra web channel enabled.
-
-### Step 1: Set Required Environment Variable
-
-```bash
-export OPENHYDRA_WHATSAPP_ACCESS_TOKEN=...
-```
-
-### Step 2: Enable Cloud API in Config
-
-```yaml
-web:
-  enabled: true
-  host: "127.0.0.1"
-  port: 7070
-
-channels:
-  whatsapp:
-    enabled: true
-    backend: "cloud-api"
-    phone_number_id: "1234567890"
-    verify_token: "your-verify-token"
-    allowed_phones: []  # optional allowlist
-```
-
-### Step 3: Start OpenHydra
-
-```bash
-uv run openhydra doctor --strict
-uv run openhydra serve
-```
-
-### Step 4: Register Webhook in Meta
-
-1. Expose your OpenHydra server publicly.
-2. Set webhook URL to:
-
-```text
-https://<public-host>/webhooks/whatsapp
-```
-
-3. Use the same `verify_token` configured above.
-
-### Step 5: Verify
-
-1. Send WhatsApp message to your Cloud API number.
-2. Confirm workflow starts and replies return via WhatsApp.
 
 ## Optional Access Control
 
