@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import io
 import os
 import re
 import shutil
@@ -55,6 +56,27 @@ def _command_available(command: str) -> bool:
 def _value_set(value: str | None) -> bool:
     """Return True when a config/env value is meaningfully set."""
     return bool(value and str(value).strip())
+
+
+def _render_whatsapp_qr_ascii(qr_data: str) -> str | None:
+    """Render WhatsApp QR payload to terminal-friendly ASCII, if renderer is available."""
+    payload = (qr_data or "").strip()
+    if not payload:
+        return None
+    try:
+        import qrcode
+    except Exception:
+        return None
+
+    try:
+        qr = qrcode.QRCode(border=1)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        out = io.StringIO()
+        qr.print_ascii(out=out, tty=False, invert=True)
+        return out.getvalue().rstrip()
+    except Exception:
+        return None
 
 
 def _doctor_provider_check(cfg: OpenHydraConfig) -> list[DoctorCheck]:
@@ -286,6 +308,17 @@ def _doctor_whatsapp_check(cfg: OpenHydraConfig) -> list[DoctorCheck]:
                 "Install Node.js/npm or set channels.whatsapp.node_path. "
                 "OpenHydra auto-installs @whiskeysockets/baileys on first start."
             ),
+        )
+    )
+    qr_dep_ok = _module_available("qrcode")
+    checks.append(
+        DoctorCheck(
+            status="ok" if qr_dep_ok else "warn",
+            title="WhatsApp terminal QR rendering",
+            detail="qrcode Python package installed."
+            if qr_dep_ok
+            else "qrcode package missing; terminal QR display unavailable.",
+            hint='Install WhatsApp extras: `uv pip install -e ".[whatsapp]"` or `".[all]"`.',
         )
     )
     return checks
@@ -836,8 +869,30 @@ def serve(
         engine = await _create_engine()
         registry = ChannelRegistry(engine, cfg)
         heartbeat_runner = None
+        last_whatsapp_qr = ""
 
         stop_event = asyncio.Event()
+
+        async def _on_whatsapp_qr(event) -> None:
+            nonlocal last_whatsapp_qr
+            payload = str(event.data.get("qr_data", "")).strip()
+            if not payload or payload == last_whatsapp_qr:
+                return
+            last_whatsapp_qr = payload
+
+            console.print(
+                "\n[bold yellow]WhatsApp pairing required.[/bold yellow] "
+                "Scan this QR with your phone:"
+            )
+            rendered = _render_whatsapp_qr_ascii(payload)
+            if rendered:
+                console.print(rendered, markup=False)
+            else:
+                console.print(
+                    "[yellow]Unable to render QR in terminal.[/yellow] "
+                    "Fallback: consume event `whatsapp.qr` over `/api/v1/ws` and "
+                    "render `data.qr_data` externally."
+                )
 
         def _handle_signal(*_):
             stop_event.set()
@@ -852,6 +907,7 @@ def serve(
             signal.signal(signal.SIGBREAK, _handle_signal)
 
         try:
+            engine.events.on("whatsapp.qr", _on_whatsapp_qr)
             await registry.start_all()
             if not was_web_enabled:
                 console.print(

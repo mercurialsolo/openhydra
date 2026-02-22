@@ -286,7 +286,7 @@ Channel-specific minimums:
 
 1. Slack: `enabled=true` + bot/app tokens
 2. WhatsApp Baileys: `enabled=true`, `backend=baileys`, Node/npm installed
-   (OpenHydra auto-installs `@whiskeysockets/baileys` on first start)
+   (OpenHydra auto-installs `@whiskeysockets/baileys` on first start and prints pairing QR in terminal)
 3. WhatsApp Cloud API: web channel enabled + phone/verify/access token configured
 4. Discord: `enabled=true` + bot token
 5. Email: IMAP/SMTP host + username + auth credentials

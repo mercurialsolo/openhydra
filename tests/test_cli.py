@@ -10,7 +10,13 @@ import typer
 import yaml
 from typer.testing import CliRunner
 
-from openhydra.cli.main import DoctorCheck, _configure_serve_for_web_clients, _run_cli, app
+from openhydra.cli.main import (
+    DoctorCheck,
+    _configure_serve_for_web_clients,
+    _render_whatsapp_qr_ascii,
+    _run_cli,
+    app,
+)
 
 runner = CliRunner()
 
@@ -140,6 +146,24 @@ def test_doctor_command_help() -> None:
     result = runner.invoke(app, ["doctor", "--help"])
     assert result.exit_code == 0
     assert re.search(r"--\s*strict\b", _normalize_help_output(result.output))
+
+
+def test_render_whatsapp_qr_ascii_empty_payload_returns_none() -> None:
+    assert _render_whatsapp_qr_ascii("") is None
+
+
+def test_render_whatsapp_qr_ascii_missing_module_returns_none(monkeypatch) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _fake_import(name, *args, **kwargs):
+        if name == "qrcode":
+            raise ImportError("module not found")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    assert _render_whatsapp_qr_ascii("test-qr-payload") is None
 
 
 def test_doctor_command_success_exit_code() -> None:

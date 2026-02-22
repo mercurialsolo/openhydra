@@ -133,7 +133,7 @@ How to talk to agents:
 
 - **Web**: submit tasks via REST (`POST /api/v1/workflows`) and watch events on WebSocket (`/api/v1/ws`)
 - **Slack**: send a DM to the bot or `@mention` it in a channel with your task text
-- **WhatsApp**: send a normal message as the task text; control commands like `approve`, `reject <reason>`, `pause`, `resume`, `cancel` are supported
+- **WhatsApp**: send a normal message as the task text; control commands like `approve`, `reject <reason>`, `pause`, `resume`, `cancel` are supported. For Baileys pairing, `openhydra serve` prints the QR in terminal (no manual WebSocket subscriber needed).
 - **Discord**: run `/hydra` with `action=run` and your task as `argument`
 
 ## Contributing
