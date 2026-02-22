@@ -58,6 +58,8 @@ Research for you:
 - `"Evaluate expansion options across Texas, Florida, and Ontario using market size, regulatory friction, and hiring costs; recommend one for Q3"`
 - `"Compare open-source LLM eval frameworks for our RAG product, rank tradeoffs, and produce a recommendation memo with implementation implications"`
 - `"Review open GitHub issues for our checkout service, cluster duplicate themes, and propose a prioritized 2-sprint stabilization plan"`
+- `"Screen US large-cap stocks, liquid call options, and top Polymarket contracts for this week; recommend 3 risk-defined opportunities with thesis, catalysts, downside case, and confidence score"`
+- `"Find the best recent papers on hierarchical reasoning for agentic products, rank the top 10 by practical relevance, and summarize what we can implement in our roadmap next sprint"`
 
 Build software products:
 - `"Define and deliver v1 team invites for our app: PRD, rollout plan, implementation, and validation tests"`
