@@ -50,7 +50,7 @@ uv run openhydra doctor --strict
 
 ## What OpenHydra Helps You Achieve
 
-OpenHydra is strongest for work that needs:
+OpenHydra is best for work that needs:
 
 - multi-step planning with dependencies, checks, and retries
 - coordination across multiple tools (code, tests, docs, browser/search, channels)
