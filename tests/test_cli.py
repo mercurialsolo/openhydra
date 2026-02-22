@@ -9,7 +9,7 @@ import typer
 import yaml
 from typer.testing import CliRunner
 
-from openhydra.cli.main import _configure_serve_for_web_clients, _run_cli, app
+from openhydra.cli.main import DoctorCheck, _configure_serve_for_web_clients, _run_cli, app
 
 runner = CliRunner()
 
@@ -18,6 +18,8 @@ def test_help() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "openhydra" in result.output.lower() or "multi-agent" in result.output.lower()
+    assert "onboard" in result.output
+    assert "doctor" in result.output
 
 
 def test_run_cli_formats_hydra_errors(capsys) -> None:
@@ -89,6 +91,118 @@ def test_approve_command_help() -> None:
 def test_reject_command_help() -> None:
     result = runner.invoke(app, ["reject", "--help"])
     assert result.exit_code == 0
+
+
+def test_init_command_help() -> None:
+    result = runner.invoke(app, ["init", "--help"])
+    assert result.exit_code == 0
+    assert "--quick" in result.output
+
+
+def test_onboard_command_help() -> None:
+    result = runner.invoke(app, ["onboard", "--help"])
+    assert result.exit_code == 0
+    assert "--full" in result.output
+
+
+def test_init_command_passes_quick_flag() -> None:
+    with patch("openhydra.cli.init_wizard.run_init_wizard") as mock_wizard:
+        result = runner.invoke(app, ["init", "--quick"])
+
+    assert result.exit_code == 0
+    mock_wizard.assert_called_once_with(quick=True)
+
+
+def test_onboard_defaults_to_quick_mode() -> None:
+    with patch("openhydra.cli.init_wizard.run_init_wizard") as mock_wizard:
+        result = runner.invoke(app, ["onboard"])
+
+    assert result.exit_code == 0
+    mock_wizard.assert_called_once_with(quick=True)
+
+
+def test_onboard_full_mode_uses_full_wizard() -> None:
+    with patch("openhydra.cli.init_wizard.run_init_wizard") as mock_wizard:
+        result = runner.invoke(app, ["onboard", "--full"])
+
+    assert result.exit_code == 0
+    mock_wizard.assert_called_once_with(quick=False)
+
+
+def test_doctor_command_help() -> None:
+    result = runner.invoke(app, ["doctor", "--help"])
+    assert result.exit_code == 0
+    assert "--strict" in result.output
+
+
+def test_doctor_command_success_exit_code() -> None:
+    from openhydra.config import OpenHydraConfig
+
+    with (
+        patch("openhydra.config.load_config", return_value=OpenHydraConfig()),
+        patch(
+            "openhydra.cli.main._run_doctor",
+            return_value=[
+                DoctorCheck(
+                    status="ok",
+                    title="Provider",
+                    detail="ready",
+                    hint="",
+                )
+            ],
+        ),
+    ):
+        result = runner.invoke(app, ["doctor"])
+
+    assert result.exit_code == 0
+    assert "Summary:" in result.output
+    assert "ok=1" in result.output
+
+
+def test_doctor_command_fails_on_failures() -> None:
+    from openhydra.config import OpenHydraConfig
+
+    with (
+        patch("openhydra.config.load_config", return_value=OpenHydraConfig()),
+        patch(
+            "openhydra.cli.main._run_doctor",
+            return_value=[
+                DoctorCheck(
+                    status="fail",
+                    title="Provider",
+                    detail="missing",
+                    hint="install",
+                )
+            ],
+        ),
+    ):
+        result = runner.invoke(app, ["doctor"])
+
+    assert result.exit_code == 1
+    assert "fail=1" in result.output
+
+
+def test_doctor_command_strict_fails_on_warnings() -> None:
+    from openhydra.config import OpenHydraConfig
+
+    with (
+        patch("openhydra.config.load_config", return_value=OpenHydraConfig()),
+        patch(
+            "openhydra.cli.main._run_doctor",
+            return_value=[
+                DoctorCheck(
+                    status="warn",
+                    title="Custom provider",
+                    detail="cannot validate",
+                    hint="manual check",
+                )
+            ],
+        ),
+    ):
+        result = runner.invoke(app, ["doctor", "--strict"])
+
+    assert result.exit_code == 1
+    assert "warn=1" in result.output
 
 
 def test_agent_scaffold_command_help() -> None:

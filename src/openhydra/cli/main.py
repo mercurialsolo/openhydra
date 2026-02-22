@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
+import os
 import re
+import shutil
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import typer
 import yaml
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 if TYPE_CHECKING:
@@ -25,6 +30,356 @@ console = Console()
 
 DEFAULT_ROLE_TOOLS = ["Read", "Glob", "Grep"]
 DEFAULT_ROLE_DESCRIPTION = "TODO: Describe this role's responsibilities."
+
+
+@dataclass
+class DoctorCheck:
+    """Single setup diagnostic check."""
+
+    status: Literal["ok", "warn", "fail"]
+    title: str
+    detail: str
+    hint: str = ""
+
+
+def _module_available(module_name: str) -> bool:
+    """Return True when a Python module can be imported."""
+    return importlib.util.find_spec(module_name) is not None
+
+
+def _command_available(command: str) -> bool:
+    """Return True when an executable exists on PATH."""
+    return shutil.which(command) is not None
+
+
+def _value_set(value: str | None) -> bool:
+    """Return True when a config/env value is meaningfully set."""
+    return bool(value and str(value).strip())
+
+
+def _doctor_provider_check(cfg: OpenHydraConfig) -> list[DoctorCheck]:
+    """Validate default provider prerequisites."""
+    provider = (cfg.agents.default_provider or "").strip()
+    checks: list[DoctorCheck] = []
+
+    provider_cfg = cfg.agents.providers.get(provider)
+    provider_api_key = provider_cfg.api_key if provider_cfg else ""
+
+    if provider == "claude-sdk":
+        ok = _command_available("claude")
+        checks.append(
+            DoctorCheck(
+                status="ok" if ok else "fail",
+                title="Default provider (claude-sdk)",
+                detail="`claude` CLI detected." if ok else "`claude` CLI not found on PATH.",
+                hint="Install Claude CLI or switch provider: `openhydra init --quick`.",
+            )
+        )
+        return checks
+
+    if provider == "codex-cli":
+        ok = _command_available("codex")
+        checks.append(
+            DoctorCheck(
+                status="ok" if ok else "fail",
+                title="Default provider (codex-cli)",
+                detail="`codex` CLI detected." if ok else "`codex` CLI not found on PATH.",
+                hint="Install Codex CLI or switch provider: `openhydra init --quick`.",
+            )
+        )
+        return checks
+
+    if provider == "anthropic-api":
+        api_key = os.environ.get("ANTHROPIC_API_KEY") or provider_api_key
+        ok = _value_set(api_key)
+        checks.append(
+            DoctorCheck(
+                status="ok" if ok else "fail",
+                title="Default provider (anthropic-api)",
+                detail="Anthropic API key configured."
+                if ok
+                else "Missing ANTHROPIC_API_KEY (or agents.providers.anthropic-api.api_key).",
+                hint=(
+                    "Set `ANTHROPIC_API_KEY` or configure "
+                    "`agents.providers.anthropic-api.api_key`."
+                ),
+            )
+        )
+        return checks
+
+    if provider == "openai-api":
+        api_key = os.environ.get("OPENAI_API_KEY") or provider_api_key
+        ok = _value_set(api_key)
+        checks.append(
+            DoctorCheck(
+                status="ok" if ok else "fail",
+                title="Default provider (openai-api)",
+                detail="OpenAI API key configured."
+                if ok
+                else "Missing OPENAI_API_KEY (or agents.providers.openai-api.api_key).",
+                hint="Set `OPENAI_API_KEY` or configure `agents.providers.openai-api.api_key`.",
+            )
+        )
+        return checks
+
+    if provider in cfg.agents.providers:
+        checks.append(
+            DoctorCheck(
+                status="warn",
+                title=f"Default provider ({provider})",
+                detail=(
+                    "Custom provider configured; doctor cannot fully validate "
+                    "provider-specific auth."
+                ),
+                hint="Run `openhydra run \"health check\"` to verify this provider end-to-end.",
+            )
+        )
+        return checks
+
+    checks.append(
+        DoctorCheck(
+            status="warn",
+            title=f"Default provider ({provider or 'unset'})",
+            detail="Provider is unknown to built-in checks.",
+            hint="Set `agents.default_provider` to claude-sdk/codex-cli/anthropic-api/openai-api.",
+        )
+    )
+    return checks
+
+
+def _doctor_web_check(cfg: OpenHydraConfig) -> list[DoctorCheck]:
+    """Validate web/runtime requirements."""
+    checks: list[DoctorCheck] = []
+    starlette_ok = _module_available("starlette")
+    uvicorn_ok = _module_available("uvicorn")
+    checks.append(
+        DoctorCheck(
+            status="ok" if starlette_ok and uvicorn_ok else "fail",
+            title="Web runtime dependencies",
+            detail="starlette + uvicorn installed."
+            if starlette_ok and uvicorn_ok
+            else "Missing web runtime deps (starlette and/or uvicorn).",
+            hint='Install web extras: `uv pip install -e ".[web]"` or `".[all]"`.',
+        )
+    )
+
+    if cfg.web.enabled:
+        has_key = _value_set(cfg.web.api_key) or _value_set(os.environ.get("OPENHYDRA_WEB_API_KEY"))
+        checks.append(
+            DoctorCheck(
+                status="ok" if has_key else "warn",
+                title="Web API key",
+                detail="API key configured."
+                if has_key
+                else "No web.api_key configured yet.",
+                hint="`openhydra serve` will auto-generate one, or set OPENHYDRA_WEB_API_KEY.",
+            )
+        )
+    return checks
+
+
+def _doctor_slack_check(cfg: OpenHydraConfig) -> list[DoctorCheck]:
+    """Validate Slack channel prerequisites."""
+    if not cfg.channels.slack.enabled:
+        return []
+    bot_ok = _value_set(cfg.channels.slack.bot_token)
+    app_ok = _value_set(cfg.channels.slack.app_token)
+    dep_ok = _module_available("slack_bolt")
+    return [
+        DoctorCheck(
+            status="ok" if dep_ok else "fail",
+            title="Slack dependency",
+            detail="slack_bolt installed." if dep_ok else "slack_bolt is not installed.",
+            hint='Install channel deps: `uv pip install -e ".[slack]"` or `".[all]"`.',
+        ),
+        DoctorCheck(
+            status="ok" if bot_ok and app_ok else "fail",
+            title="Slack tokens",
+            detail="Bot + app tokens configured."
+            if bot_ok and app_ok
+            else "Missing OPENHYDRA_SLACK_BOT_TOKEN and/or OPENHYDRA_SLACK_APP_TOKEN.",
+            hint="Set both token env vars for Socket Mode.",
+        ),
+    ]
+
+
+def _doctor_discord_check(cfg: OpenHydraConfig) -> list[DoctorCheck]:
+    """Validate Discord channel prerequisites."""
+    if not cfg.channels.discord.enabled:
+        return []
+    token_ok = _value_set(cfg.channels.discord.bot_token)
+    dep_ok = _module_available("discord")
+    return [
+        DoctorCheck(
+            status="ok" if dep_ok else "fail",
+            title="Discord dependency",
+            detail="discord.py installed." if dep_ok else "discord.py is not installed.",
+            hint='Install channel deps: `uv pip install -e ".[discord]"` or `".[all]"`.',
+        ),
+        DoctorCheck(
+            status="ok" if token_ok else "fail",
+            title="Discord token",
+            detail="Bot token configured."
+            if token_ok
+            else "Missing OPENHYDRA_DISCORD_BOT_TOKEN.",
+            hint="Set OPENHYDRA_DISCORD_BOT_TOKEN.",
+        ),
+    ]
+
+
+def _doctor_whatsapp_check(cfg: OpenHydraConfig) -> list[DoctorCheck]:
+    """Validate WhatsApp channel prerequisites."""
+    if not cfg.channels.whatsapp.enabled:
+        return []
+    checks: list[DoctorCheck] = []
+    wa = cfg.channels.whatsapp
+    backend = (wa.backend or "baileys").strip().lower()
+    if backend == "cloud-api":
+        dep_ok = _module_available("httpx")
+        token_ok = _value_set(wa.access_token)
+        phone_ok = _value_set(wa.phone_number_id)
+        verify_ok = _value_set(wa.verify_token)
+        checks.extend(
+            [
+                DoctorCheck(
+                    status="ok" if dep_ok else "fail",
+                    title="WhatsApp Cloud API dependency",
+                    detail="httpx installed." if dep_ok else "httpx is not installed.",
+                    hint='Install channel deps: `uv pip install -e ".[web]"` or `".[all]"`.',
+                ),
+                DoctorCheck(
+                    status="ok" if token_ok and phone_ok and verify_ok else "fail",
+                    title="WhatsApp Cloud API credentials",
+                    detail="Access token, phone_number_id, and verify_token configured."
+                    if token_ok and phone_ok and verify_ok
+                    else (
+                        "Missing one or more of OPENHYDRA_WHATSAPP_ACCESS_TOKEN, "
+                        "phone_number_id, verify_token."
+                    ),
+                    hint=(
+                        "Set OPENHYDRA_WHATSAPP_ACCESS_TOKEN and configure "
+                        "channels.whatsapp.phone_number_id/verify_token."
+                    ),
+                ),
+            ]
+        )
+        if not cfg.web.enabled:
+            checks.append(
+                DoctorCheck(
+                    status="fail",
+                    title="WhatsApp Cloud API + web channel",
+                    detail="Cloud API backend requires the web channel to be enabled.",
+                    hint="Set `web.enabled: true` and run `openhydra serve`.",
+                )
+            )
+        return checks
+
+    node_ok = _command_available(wa.node_path or "node")
+    checks.append(
+        DoctorCheck(
+            status="ok" if node_ok else "fail",
+            title="WhatsApp Baileys runtime",
+            detail=f"`{wa.node_path or 'node'}` executable detected."
+            if node_ok
+            else f"`{wa.node_path or 'node'}` not found on PATH.",
+            hint="Install Node.js or set channels.whatsapp.node_path.",
+        )
+    )
+    return checks
+
+
+def _doctor_email_check(cfg: OpenHydraConfig) -> list[DoctorCheck]:
+    """Validate email channel prerequisites."""
+    if not cfg.channels.email.enabled:
+        return []
+    email_cfg = cfg.channels.email
+    dep_imap = _module_available("aioimaplib")
+    dep_smtp = _module_available("aiosmtplib")
+    imap_ok = _value_set(email_cfg.imap_host)
+    smtp_ok = _value_set(email_cfg.smtp_host)
+    user_ok = _value_set(email_cfg.username)
+
+    checks = [
+        DoctorCheck(
+            status="ok" if dep_imap and dep_smtp else "fail",
+            title="Email dependencies",
+            detail="aioimaplib + aiosmtplib installed."
+            if dep_imap and dep_smtp
+            else "Missing aioimaplib and/or aiosmtplib.",
+            hint='Install email extras: `uv pip install -e ".[email]"`.',
+        ),
+        DoctorCheck(
+            status="ok" if imap_ok and smtp_ok and user_ok else "fail",
+            title="Email server config",
+            detail="IMAP host, SMTP host, and username configured."
+            if imap_ok and smtp_ok and user_ok
+            else "Missing one or more of imap_host, smtp_host, username.",
+            hint=(
+                "Set OPENHYDRA_EMAIL_IMAP_HOST, OPENHYDRA_EMAIL_SMTP_HOST, "
+                "OPENHYDRA_EMAIL_USERNAME."
+            ),
+        ),
+    ]
+
+    if (email_cfg.auth_method or "").lower() == "oauth2":
+        oauth_ok = all(
+            [
+                _value_set(email_cfg.oauth_client_id),
+                _value_set(email_cfg.oauth_client_secret),
+                _value_set(email_cfg.oauth_refresh_token),
+            ]
+        )
+        checks.append(
+            DoctorCheck(
+                status="ok" if oauth_ok else "fail",
+                title="Email OAuth2 credentials",
+                detail="OAuth2 client id/secret/refresh token configured."
+                if oauth_ok
+                else "Missing OAuth2 client id/secret/refresh token.",
+                hint=(
+                    "Set OPENHYDRA_EMAIL_OAUTH_CLIENT_ID, OPENHYDRA_EMAIL_OAUTH_CLIENT_SECRET, "
+                    "OPENHYDRA_EMAIL_OAUTH_REFRESH_TOKEN."
+                ),
+            )
+        )
+    else:
+        password_ok = _value_set(email_cfg.password)
+        checks.append(
+            DoctorCheck(
+                status="ok" if password_ok else "fail",
+                title="Email password auth",
+                detail="Email password configured."
+                if password_ok
+                else "Missing OPENHYDRA_EMAIL_PASSWORD.",
+                hint="Set OPENHYDRA_EMAIL_PASSWORD or switch to auth_method: oauth2.",
+            )
+        )
+
+    return checks
+
+
+def _run_doctor(cfg: OpenHydraConfig) -> list[DoctorCheck]:
+    """Collect all setup checks."""
+    checks: list[DoctorCheck] = []
+    checks.extend(_doctor_provider_check(cfg))
+    checks.extend(_doctor_web_check(cfg))
+    checks.extend(_doctor_slack_check(cfg))
+    checks.extend(_doctor_discord_check(cfg))
+    checks.extend(_doctor_whatsapp_check(cfg))
+    checks.extend(_doctor_email_check(cfg))
+    if cfg.channels.extras:
+        checks.append(
+            DoctorCheck(
+                status="warn",
+                title="External channel plugins",
+                detail=(
+                    f"Found {len(cfg.channels.extras)} external channel config(s); "
+                    "doctor does not validate plugin-specific requirements."
+                ),
+                hint="Validate custom channels with their plugin docs.",
+            )
+        )
+    return checks
 
 
 def _humanize_role_id(role_id: str) -> str:
@@ -637,6 +992,63 @@ def skill_reject(
     _run_cli(_reject())
 
 
+@app.command(name="doctor")
+def doctor(
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Treat warnings as failures (exit code 1).",
+    ),
+) -> None:
+    """Validate local setup and channel prerequisites."""
+    from openhydra.config import load_config
+
+    cfg = load_config()
+    checks = _run_doctor(cfg)
+    if not checks:
+        console.print("[bold green]Doctor: no checks to run.[/bold green]")
+        return
+
+    table = Table(title="OpenHydra Doctor")
+    table.add_column("Status")
+    table.add_column("Check")
+    table.add_column("Detail")
+    table.add_column("Hint")
+
+    status_style = {
+        "ok": ("OK", "green"),
+        "warn": ("WARN", "yellow"),
+        "fail": ("FAIL", "red"),
+    }
+    fail_count = 0
+    warn_count = 0
+    ok_count = 0
+
+    for check in checks:
+        label, style = status_style[check.status]
+        table.add_row(
+            f"[{style}]{label}[/{style}]",
+            escape(check.title),
+            escape(check.detail),
+            escape(check.hint),
+        )
+        if check.status == "fail":
+            fail_count += 1
+        elif check.status == "warn":
+            warn_count += 1
+        else:
+            ok_count += 1
+
+    console.print(table)
+    console.print(
+        f"[bold]Summary:[/bold] ok={ok_count} warn={warn_count} fail={fail_count} "
+        f"(strict={'on' if strict else 'off'})"
+    )
+
+    if fail_count > 0 or (strict and warn_count > 0):
+        raise typer.Exit(code=1)
+
+
 # --- Auth commands ---
 
 auth_app = typer.Typer(name="auth", help="Manage channel authorization.")
@@ -982,11 +1394,31 @@ def config() -> None:
 
 
 @app.command(name="init")
-def init_config() -> None:
+def init_config(
+    quick: bool = typer.Option(
+        False,
+        "--quick",
+        help="Quick setup with detected defaults and fewer prompts.",
+    ),
+) -> None:
     """Interactive setup wizard — configure providers, tools, and API keys."""
     from openhydra.cli.init_wizard import run_init_wizard
 
-    run_init_wizard()
+    run_init_wizard(quick=quick)
+
+
+@app.command(name="onboard")
+def onboard_config(
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Run the full interactive setup instead of quick mode.",
+    ),
+) -> None:
+    """Recommended onboarding flow. Quick mode by default."""
+    from openhydra.cli.init_wizard import run_init_wizard
+
+    run_init_wizard(quick=not full)
 
 
 if __name__ == "__main__":

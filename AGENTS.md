@@ -10,7 +10,15 @@
 
 ## Build, Test, and Development Commands
 ```bash
-# Install (editable). Use extras when you need optional providers/channels.
+# Install (editable, minimal)
+uv pip install -e .
+
+# Recommended first-run setup + diagnostics
+uv run openhydra onboard
+uv run openhydra doctor
+
+# Optional: full interactive setup + optional providers/channels
+uv run openhydra init
 uv pip install -e ".[all]"
 
 # CLI help / run a one-off workflow
@@ -19,9 +27,6 @@ uv run openhydra run "Build a Python CLI that converts CSV to JSON"
 
 # Serve engine + enabled channels (web/Slack/Discord/WhatsApp/email if configured)
 uv run openhydra serve --host 127.0.0.1 --port 7070
-
-# Interactive setup wizard
-uv run openhydra init
 
 # Tests + lint
 uv run pytest
@@ -40,7 +45,7 @@ uv run ruff check src/ tests/
 ## Testing Guidelines
 - Framework: `pytest` (asyncio mode is `auto`).
 - Name tests `tests/test_*.py`; add regression coverage for bug fixes.
-- Run a focused subset with `uv run pytest tests/test_cli.py -k init`.
+- Run a focused subset with `uv run pytest tests/test_cli.py -k doctor`.
 
 ## WhatsApp Support (Optional)
 - This repo includes a WhatsApp channel with two backends:

@@ -11,11 +11,18 @@ Thanks for contributing. This project uses a lightweight, test-first workflow an
 ## Local Setup
 
 ```bash
-# Install package in editable mode with optional deps
-uv pip install -e ".[all]"
+# Install package in editable mode (minimal)
+uv pip install -e .
+
+# Recommended first-run setup + diagnostics
+uv run openhydra onboard
+uv run openhydra doctor
 
 # Verify CLI boots
 uv run openhydra --help
+
+# Optional: install full provider/channel extras
+uv pip install -e ".[all]"
 ```
 
 ## Development Workflow
@@ -63,7 +70,7 @@ uv run pytest
 - Example focused run:
 
 ```bash
-uv run pytest tests/test_cli.py -k init
+uv run pytest tests/test_cli.py -k doctor
 ```
 
 ## Security

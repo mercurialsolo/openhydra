@@ -6,15 +6,24 @@ Lightweight, local-first multi-agent orchestration. One command, no Docker, no e
 
 ```bash
 # Install
-uv pip install -e ".[all]"
+uv pip install -e .
 
-# Optional: interactive setup (writes ~/.openhydra/openhydra.yaml and can enable channels)
-uv run openhydra init
+# Recommended: quick onboarding (writes ~/.openhydra/openhydra.yaml with safe defaults)
+uv run openhydra onboard
+
+# Validate setup and channel/provider prerequisites
+uv run openhydra doctor
 
 # Run a one-off workflow
 uv run openhydra run "Build a Python CLI that converts CSV to JSON"
 
-# Or run the server (web API + any enabled channels)
+# Optional: full interactive setup (providers/tools/channels)
+uv run openhydra init
+
+# Optional: install channel/web extras before serving
+uv pip install -e ".[all]"
+
+# Run the server (web API + any enabled channels)
 uv run openhydra serve
 
 # Scaffold a new role agent in config/roles.yaml
@@ -22,6 +31,18 @@ uv run openhydra agent scaffold eng.docs --description "Writes implementation do
 
 # Interactive scaffold (prompts for objectives, skills, tools, and context/data)
 uv run openhydra agent scaffold --interactive
+```
+
+### Setup Doctor
+
+Validate your local runtime, default provider, and enabled channel prerequisites:
+
+```bash
+# normal mode (fails only on hard errors)
+uv run openhydra doctor
+
+# strict mode (warnings also fail)
+uv run openhydra doctor --strict
 ```
 
 ## What It Does
