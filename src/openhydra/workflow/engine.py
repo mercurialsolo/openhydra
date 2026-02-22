@@ -69,17 +69,26 @@ class WorkflowEngine:
         self._workspaces: dict[str, Workspace] = {}
         # Pause control: SET = running, CLEAR = paused
         self._pause_flags: dict[str, asyncio.Event] = {}
+        # Cached per-workflow config (JSON from workflows.config)
+        self._workflow_configs: dict[str, dict[str, Any]] = {}
 
-    async def create_workflow(self, task: str, steps: list[Step]) -> str:
+    async def create_workflow(
+        self,
+        task: str,
+        steps: list[Step],
+        *,
+        config: dict[str, Any] | None = None,
+    ) -> str:
         """Create a workflow with pre-planned steps. Returns workflow ID."""
         workflow_id = uuid.uuid4().hex[:12]
         now = datetime.now(timezone.utc).isoformat()
+        config_json = json.dumps(config) if config else None
 
         # Write workflow to DB
         await self._db.conn.execute(
-            "INSERT INTO workflows (id, status, input, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (workflow_id, WorkflowStatus.CREATED.value, task, now, now),
+            "INSERT INTO workflows (id, status, input, config, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (workflow_id, WorkflowStatus.CREATED.value, task, config_json, now, now),
         )
 
         # Write steps to DB
@@ -117,6 +126,9 @@ class WorkflowEngine:
         ))
 
         try:
+            # Cache workflow config for prompt context (session_key, channel metadata, etc.)
+            self._workflow_configs[workflow_id] = await self._load_workflow_config(workflow_id)
+
             steps = await self._load_steps(workflow_id)
             await self._execute_dag(workflow_id, steps)
 
@@ -145,9 +157,18 @@ class WorkflowEngine:
                     (total_cost, total_tokens, workflow_id),
                 )
                 await self._db.conn.commit()
+
+                output_preview = await self._get_last_step_output_text(workflow_id)
+                await self._store_session_reply(workflow_id, output_preview, status="completed")
+
                 await self._events.emit(Event(
                     type=WORKFLOW_COMPLETED,
-                    data={"workflow_id": workflow_id, "cost_usd": total_cost},
+                    data={
+                        "workflow_id": workflow_id,
+                        "cost_usd": total_cost,
+                        "output": output_preview,
+                        **self._session_event_context(workflow_id),
+                    },
                 ))
             else:
                 failed = [s for s in steps if s.status == StepStatus.FAILED]
@@ -156,20 +177,39 @@ class WorkflowEngine:
                     await self._update_workflow_status(
                         workflow_id, WorkflowStatus.FAILED, error=error
                     )
+                    await self._store_session_reply(
+                        workflow_id,
+                        f"Workflow failed: {error}",
+                        status="failed",
+                    )
                     await self._events.emit(Event(
                         type=WORKFLOW_FAILED,
-                        data={"workflow_id": workflow_id, "error": error},
+                        data={
+                            "workflow_id": workflow_id,
+                            "error": error,
+                            **self._session_event_context(workflow_id),
+                        },
                     ))
         except Exception as e:
             await self._update_workflow_status(
                 workflow_id, WorkflowStatus.FAILED, error=str(e)
             )
+            await self._store_session_reply(
+                workflow_id,
+                f"Workflow failed: {str(e)}",
+                status="failed",
+            )
             await self._events.emit(Event(
                 type=WORKFLOW_FAILED,
-                data={"workflow_id": workflow_id, "error": str(e)},
+                data={
+                    "workflow_id": workflow_id,
+                    "error": str(e),
+                    **self._session_event_context(workflow_id),
+                },
             ))
         finally:
             self._pause_flags.pop(workflow_id, None)
+            self._workflow_configs.pop(workflow_id, None)
 
     async def _execute_dag(self, workflow_id: str, steps: list[Step]) -> None:
         """Execute steps respecting depends_on DAG ordering."""
@@ -584,9 +624,21 @@ class WorkflowEngine:
         )
         await self._update_workflow_status(workflow_id, WorkflowStatus.CANCELLED)
         await self._db.conn.commit()
+
+        # Best-effort: include session metadata if present (for channel routing).
+        wf_cfg = self._workflow_configs.get(workflow_id) or await self._load_workflow_config(
+            workflow_id,
+        )
+        ctx: dict[str, Any] = {}
+        if wf_cfg:
+            for k in ("session_key", "channel", "user_id", "user_name"):
+                v = wf_cfg.get(k)
+                if v:
+                    ctx[k] = v
+
         await self._events.emit(Event(
             type=WORKFLOW_CANCELLED,
-            data={"workflow_id": workflow_id},
+            data={"workflow_id": workflow_id, **ctx},
         ))
 
     async def get_workflow(self, workflow_id: str) -> dict[str, Any]:
@@ -650,8 +702,24 @@ class WorkflowEngine:
         self, workflow_id: str, step: Step
     ) -> dict[str, Any]:
         """Build execution context with outputs from dependency steps."""
+        ctx: dict[str, Any] = {}
+
+        # Inject workflow config into every step (session_key, channel/user metadata, etc.)
+        wf_cfg = self._workflow_configs.get(workflow_id) or {}
+        if wf_cfg:
+            ctx["workflow_config"] = wf_cfg
+            # Convenience copy for common lookups in RoleExecutor
+            if "session_key" in wf_cfg:
+                ctx["session_key"] = wf_cfg.get("session_key")
+            if "channel" in wf_cfg:
+                ctx["channel"] = wf_cfg.get("channel")
+            if "user_id" in wf_cfg:
+                ctx["user_id"] = wf_cfg.get("user_id")
+            if "user_name" in wf_cfg:
+                ctx["user_name"] = wf_cfg.get("user_name")
+
         if not step.depends_on:
-            return {}
+            return ctx
 
         steps = await self._load_steps(workflow_id)
         dep_outputs = []
@@ -660,7 +728,9 @@ class WorkflowEngine:
             if dep_step and dep_step.output_data:
                 dep_outputs.append(dep_step.output_data)
 
-        return {"previous_outputs": dep_outputs} if dep_outputs else {}
+        if dep_outputs:
+            ctx["previous_outputs"] = dep_outputs
+        return ctx
 
     async def _load_steps(self, workflow_id: str) -> list[Step]:
         """Load all steps for a workflow from DB."""
@@ -714,3 +784,93 @@ class WorkflowEngine:
             (status.value, step_id),
         )
         await self._db.conn.commit()
+
+    async def _load_workflow_config(self, workflow_id: str) -> dict[str, Any]:
+        """Load workflow.config JSON (best-effort)."""
+        try:
+            cursor = await self._db.conn.execute(
+                "SELECT config FROM workflows WHERE id = ?",
+                (workflow_id,),
+            )
+            row = await cursor.fetchone()
+            if not row or not row["config"]:
+                return {}
+            return json.loads(row["config"])
+        except Exception:
+            return {}
+
+    async def _get_last_step_output_text(self, workflow_id: str) -> str:
+        """Fetch and normalize the last step's output for display/delivery."""
+        try:
+            cursor = await self._db.conn.execute(
+                "SELECT output_data FROM steps WHERE workflow_id = ? "
+                "ORDER BY ordinal DESC LIMIT 1",
+                (workflow_id,),
+            )
+            row = await cursor.fetchone()
+            if not row or not row["output_data"]:
+                return ""
+            return self._extract_text_from_output_data(row["output_data"])
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _extract_text_from_output_data(output_data: str) -> str:
+        """Convert stored output_data into a readable text payload."""
+        if not output_data:
+            return ""
+        try:
+            parsed = json.loads(output_data)
+            if isinstance(parsed, dict):
+                text = parsed.get("text")
+                if isinstance(text, str) and text.strip():
+                    return text.strip()
+                # Fallback: pretty JSON
+                return json.dumps(parsed, indent=2)[:4000]
+            return str(parsed)[:4000]
+        except Exception:
+            # output_data may already be plain text
+            return str(output_data)[:4000]
+
+    async def _store_session_reply(self, workflow_id: str, text: str, *, status: str) -> None:
+        """Best-effort: store assistant reply in per-session memory."""
+        if not text:
+            return
+        session_key = (self._workflow_configs.get(workflow_id) or {}).get("session_key")
+        if not session_key:
+            return
+
+        memory = getattr(self._role_executor, "memory", None)
+        if not memory:
+            return
+
+        content = f"ASSISTANT: {text}"
+        if len(content) > 1500:
+            content = content[:1500] + "..."
+
+        try:
+            await memory.store(
+                collection=f"session:{session_key}",
+                content=content,
+                metadata={
+                    "type": "assistant_message",
+                    "workflow_id": workflow_id,
+                    "status": status,
+                },
+            )
+        except Exception:
+            return
+
+    def _session_event_context(self, workflow_id: str) -> dict[str, Any]:
+        """Expose minimal workflow session metadata on emitted events.
+
+        This enables channel adapters to route terminal messages back to the
+        originating channel without needing per-process in-memory maps.
+        """
+        cfg = self._workflow_configs.get(workflow_id) or {}
+        ctx: dict[str, Any] = {}
+        for k in ("session_key", "channel", "user_id", "user_name"):
+            v = cfg.get(k)
+            if v:
+                ctx[k] = v
+        return ctx

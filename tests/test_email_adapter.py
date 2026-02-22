@@ -8,9 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from openhydra.channels.context import ChannelContext
 from openhydra.channels.email import create_channel
 from openhydra.channels.email.adapter import _TOKEN_EXPIRY_BUFFER, EmailChannel
 from openhydra.config import EmailConfig
+from openhydra.events import EventBus
 
 
 @pytest.fixture
@@ -49,10 +51,12 @@ def oauth_config():
 
 @pytest.fixture
 def ctx():
-    ctx = MagicMock()
-    ctx.engine = MagicMock()
-    ctx.engine.submit = AsyncMock(return_value="wf-email-1")
-    return ctx
+    class FakeEngine:
+        def __init__(self):
+            self.events = EventBus()
+            self.submit = AsyncMock(return_value="wf-email-1")
+
+    return ChannelContext(engine=FakeEngine())
 
 
 class TestEmailChannelProtocol:

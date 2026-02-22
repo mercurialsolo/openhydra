@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any, Callable, Coroutine
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,11 @@ class BaileysBridge:
         self._on_qr = on_qr
 
         cmd = [self._node_path, self._bridge_script]
-        env: dict[str, str] = {}
+        # If we override env at all, we must merge with the parent environment
+        # so the subprocess retains PATH, HOME, etc.
+        env = None
         if self._auth_dir:
+            env = os.environ.copy()
             env["BAILEYS_AUTH_DIR"] = self._auth_dir
 
         self._process = await asyncio.create_subprocess_exec(
@@ -50,7 +54,7 @@ class BaileysBridge:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=env if env else None,
+            env=env,
         )
         self._reader_task = asyncio.create_task(self._read_loop())
 

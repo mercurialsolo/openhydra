@@ -47,7 +47,7 @@ class Planner:
         self._role_executor = role_executor
         self._roles = roles
 
-    async def plan(self, task: str) -> list[Step]:
+    async def plan(self, task: str, context: dict[str, Any] | None = None) -> list[Step]:
         """Generate a plan for the given task."""
         roles_desc = self._format_roles()
 
@@ -59,6 +59,7 @@ class Planner:
         result = await self._role_executor.execute(
             role_id="planner",
             instructions=instructions,
+            context=context,
         )
 
         return self._parse_steps(result.output, result.raw_text)

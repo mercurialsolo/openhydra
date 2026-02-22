@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an improvement to OpenHydra
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Propose a specific improvement with rationale and expected behavior.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user/developer problem does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the preferred approach.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and scope
+      description: Any compatibility, config, or migration impact?

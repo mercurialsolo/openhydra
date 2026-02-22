@@ -126,7 +126,12 @@ def test_inbound_message_submits_task(client, engine, http_client):
         json=_make_webhook_payload("+1234567890", "build a thing"),
     )
     assert resp.status_code == 200
-    engine.submit.assert_called_once_with("build a thing")
+    engine.submit.assert_called_once_with(
+        "build a thing",
+        session_key="whatsapp:+1234567890",
+        channel="whatsapp",
+        user_id="+1234567890",
+    )
     # Should send confirmation
     http_client.post.assert_called_once()
 

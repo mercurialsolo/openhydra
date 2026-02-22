@@ -430,6 +430,14 @@ def load_config(config_path: Path | None = None) -> OpenHydraConfig:
     if not config.skills.sources:
         config.skills.sources.append(SkillSourceConfig(type="filesystem", path="./skills"))
 
+    # Default WhatsApp Baileys auth dir: state_dir/whatsapp_auth.
+    # If unset, the Node bridge defaults to ./whatsapp_auth (cwd), which can
+    # unintentionally create auth files in the repo.
+    if config.channels.whatsapp.auth_dir:
+        config.channels.whatsapp.auth_dir = os.path.expanduser(config.channels.whatsapp.auth_dir)
+    else:
+        config.channels.whatsapp.auth_dir = str(config.engine.state_dir / "whatsapp_auth")
+
     # Default memory path
     if config.memory.sqlite_path is None:
         config.memory.sqlite_path = config.engine.state_dir / "memory.db"

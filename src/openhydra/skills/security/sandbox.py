@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import platform
 import time
@@ -48,8 +49,13 @@ class SandboxExecutor:
                 )
                 timed_out = False
             except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
+                kill_result = proc.kill()
+                if inspect.isawaitable(kill_result):
+                    await kill_result
+
+                wait_result = proc.wait()
+                if inspect.isawaitable(wait_result):
+                    await wait_result
                 stdout_bytes = b""
                 stderr_bytes = b"Process killed: timeout exceeded"
                 timed_out = True

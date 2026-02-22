@@ -175,7 +175,12 @@ class WhatsAppHandlers:
             text = combined
 
         # Submit as new task
-        workflow_id = await self._engine.submit(text)
+        workflow_id = await self._engine.submit(
+            text,
+            session_key=f"whatsapp:{phone}",
+            channel="whatsapp",
+            user_id=phone,
+        )
         self._conversations[phone] = workflow_id
 
         # Store in session if available

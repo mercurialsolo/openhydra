@@ -36,6 +36,8 @@ class RoleDefinition:
     id: str
     name: str
     description: str = ""
+    objectives: list[str] = field(default_factory=list)
+    context_reads: list[str] = field(default_factory=list)
     provider: str = ""  # empty = use default
     model: str | None = None
     skill_packs: list[str] = field(default_factory=list)
@@ -57,6 +59,22 @@ class RoleCatalog:
         with open(path) as f:
             raw = yaml.safe_load(f)
 
+        def _as_str_list(value: object) -> list[str]:
+            if value is None:
+                return []
+            if isinstance(value, str):
+                text = value.strip()
+                return [text] if text else []
+            if not isinstance(value, list):
+                return []
+
+            values: list[str] = []
+            for item in value:
+                text = str(item).strip()
+                if text:
+                    values.append(text)
+            return values
+
         for role_id, role_raw in raw.get("roles", {}).items():
             gates = []
             for g in role_raw.get("gates", []):
@@ -73,6 +91,8 @@ class RoleCatalog:
                 id=role_id,
                 name=role_raw.get("name", role_id),
                 description=role_raw.get("description", ""),
+                objectives=_as_str_list(role_raw.get("objectives")),
+                context_reads=_as_str_list(role_raw.get("context_reads")),
                 provider=role_raw.get("provider", ""),
                 model=role_raw.get("model"),
                 skill_packs=role_raw.get("skill_packs", []),

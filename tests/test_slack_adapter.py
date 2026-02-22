@@ -84,7 +84,12 @@ async def test_mention_submits_task(bolt_app, handlers, engine):
     handler_fn = bolt_app._event_handlers["app_mention"][0]
     await handler_fn(event=event, say=say)
 
-    engine.submit.assert_called_once_with("build a thing")
+    engine.submit.assert_called_once_with(
+        "build a thing",
+        session_key="slack:U1",
+        channel="slack",
+        user_id="U1",
+    )
     say.assert_called_once()
     assert "wf-123" in say.call_args[1].get(
         "text", say.call_args[0][0] if say.call_args[0] else ""
@@ -98,7 +103,12 @@ async def test_dm_submits_task(bolt_app, handlers, engine):
     handler_fn = bolt_app._event_handlers["message"][0]
     await handler_fn(event=event, say=say)
 
-    engine.submit.assert_called_once_with("hello task")
+    engine.submit.assert_called_once_with(
+        "hello task",
+        session_key="slack:U1",
+        channel="slack",
+        user_id="U1",
+    )
 
 
 @pytest.mark.asyncio

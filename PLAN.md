@@ -315,14 +315,16 @@ Expected output:
 **Goal:** Complete CLI for day-to-day use.
 
 **Commands:**
-- `openhydra start` — Start engine (background or foreground)
+- `openhydra init` — Interactive config wizard (writes `~/.openhydra/openhydra.yaml`)
+- `openhydra serve` — Start engine + enabled channels
 - `openhydra run <task>` — Submit and optionally watch
 - `openhydra status [workflow-id]` — Show status
 - `openhydra list` — List all workflows
-- `openhydra approve/reject/respond <id>` — Handle approvals
-- `openhydra skills list/add` — Manage skills
-- `openhydra memory search/store` — Interact with memory
-- `openhydra config show/set` — Configuration
+- `openhydra approve/reject <id>` — Handle approvals
+- `openhydra pause/resume/cancel <id>` — Control running workflows
+- `openhydra auth add/revoke <channel:user_id>` — Allowlist identities for channel access
+- `openhydra skills` — List skills
+- `openhydra config` — Show configuration
 
 **Exit criteria:**
 - All commands work

@@ -37,11 +37,11 @@ uv run ruff check src/ tests/
 
 ## Key Design Rules
 
-1. **Core knows nothing about interfaces.** No CLI, TUI, or web imports in `src/openhydra/` (except `cli/`).
+1. **Engine stays decoupled from channels.** Engine/workflow code must not import channel implementations or web frameworks; channels subscribe to events and call engine APIs.
 2. **Adapters are protocols.** Memory, agents, skills use `Protocol` classes — swap implementations freely.
 3. **State survives crashes.** Every state transition writes to SQLite before execution.
 4. **Skills are files.** SKILL.md + metadata.yaml on disk. No database for skill content.
-5. **Skills can be generated.** `SkillBuilder` generates skills on-the-fly via LLM when not found on disk. Enabled by default (`skills.builder_enabled`). Generated skills are written to `~/.openhydra/generated_skills/` and scored with a heuristic quality gate before acceptance.
+5. **Skills can be generated.** `SkillBuilder` can generate skills on-the-fly via LLM when not found on disk. Disabled by default (`skills.builder_enabled: false`); generated skills are written to `~/.openhydra/generated_skills/` and scored with a heuristic quality gate before acceptance.
 6. **Roles are config.** `config/roles.yaml` defines behavior. No role-specific code.
 7. **Events decouple.** Core emits events, interfaces subscribe. No callbacks or direct coupling.
 
@@ -61,7 +61,8 @@ src/openhydra/
   memory/            # Vector memory backends
   roles/             # Role catalog + prompt assembly
   gates/             # Quality gates between steps
-  cli/               # typer CLI (the only interface in core package)
+  channels/          # Web + messaging adapters (Slack/Discord/WhatsApp/email)
+  cli/               # typer CLI entrypoints
 
 config/              # Default role catalog + output schemas
 skills/              # Bundled starter skills

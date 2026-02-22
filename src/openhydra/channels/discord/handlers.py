@@ -99,7 +99,12 @@ class DiscordHandlers:
                 text = combined
 
             await interaction.response.defer()
-            workflow_id = await self._engine.submit(text)
+            workflow_id = await self._engine.submit(
+                text,
+                session_key=f"discord:{user_id}",
+                channel="discord",
+                user_id=user_id,
+            )
             # Track thread for progress updates
             channel_id = interaction.channel_id
             msg = await interaction.followup.send(
@@ -221,6 +226,23 @@ class DiscordHandlers:
         """Forward engine events to the appropriate Discord thread."""
         wf_id = event.data.get("workflow_id", "")
         thread_info = self._threads.get(wf_id)
+
+        # Fallback to persisted session metadata (survives restarts, last workflow per user)
+        if not thread_info and self._sessions:
+            try:
+                session = await self._sessions.find_by_workflow(wf_id)
+            except Exception:
+                session = None
+            if session and session.last_channel == "discord":
+                try:
+                    ch_id = int(session.metadata.get("channel_id", 0) or 0)
+                    msg_id = int(session.metadata.get("message_id", 0) or 0)
+                except Exception:
+                    ch_id, msg_id = 0, 0
+                if ch_id and msg_id:
+                    thread_info = (ch_id, msg_id)
+                    self._threads[wf_id] = thread_info
+
         if not thread_info:
             return
 

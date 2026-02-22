@@ -8,8 +8,20 @@ Lightweight, local-first multi-agent orchestration. One command, no Docker, no e
 # Install
 uv pip install -e ".[all]"
 
-# Run
-openhydra start
+# Optional: interactive setup (writes ~/.openhydra/openhydra.yaml and can enable channels)
+uv run openhydra init
+
+# Run a one-off workflow
+uv run openhydra run "Build a Python CLI that converts CSV to JSON"
+
+# Or run the server (web API + any enabled channels)
+uv run openhydra serve
+
+# Scaffold a new role agent in config/roles.yaml
+uv run openhydra agent scaffold eng.docs --description "Writes implementation docs"
+
+# Interactive scaffold (prompts for objectives, skills, tools, and context/data)
+uv run openhydra agent scaffold --interactive
 ```
 
 ## What It Does
@@ -26,12 +38,138 @@ This will:
 3. **Gate** — Check quality between steps, ask for human input when needed
 4. **Deliver** — Produce the final artifacts in your project directory
 
+## What Tasks Can OpenHydra Help You Do?
+
+OpenHydra is strongest on tasks that need coordination across multiple steps, roles, and checks.
+You describe the outcome, and it builds the execution plan at submit time.
+
+Examples of plan-heavy tasks:
+
+- **Feature delivery from idea to tested code**
+  - `"Add OAuth login with Google and GitHub, wire session handling, and add tests"`
+- **Complex refactors with safety checks**
+  - `"Migrate this Flask API to FastAPI without breaking existing endpoints"`
+- **Bug investigation + regression prevention**
+  - `"Find and fix the intermittent checkout timeout and add regression coverage"`
+- **Product-to-engineering handoff in one run**
+  - `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
+- **Cross-cutting upgrades**
+  - `"Upgrade to Pydantic v2, fix breaking changes, and verify CLI behavior"`
+
+## Planning On The Fly (No Manual Plan File)
+
+You do not need to write a plan first. Submit the task directly:
+
+```bash
+uv run openhydra run "Migrate this Flask API to FastAPI without breaking existing endpoints" --watch
+```
+
+OpenHydra then:
+
+1. Uses the `planner` role to generate a JSON step graph (`role_id`, `instructions`, `depends_on`)
+2. Persists workflow + steps to SQLite before running (for durability/recovery)
+3. Executes ready steps based on dependencies (independent branches can run concurrently)
+4. Applies role gates (quality/tests/approval) between steps
+5. Reports progress/events and final output
+
+For that FastAPI migration prompt, a typical generated plan could look like:
+
+1. `eng.init`: inventory current Flask routes and migration constraints
+2. `eng.implement`: port app structure and handlers to FastAPI
+3. `test.code`: run/update tests and validate endpoint compatibility
+4. `pm.review`: verify scope completion and release readiness
+
+To inspect the generated plan and step-by-step progress:
+
+```bash
+uv run openhydra status <workflow_id>
+```
+
+## Contributing
+
+See `CONTRIBUTING.md` for the contributor workflow, checks, and PR requirements.
+
+## Configuration
+
+OpenHydra loads config in this order:
+1. `.openhydra/openhydra.yaml` (project-local)
+2. `~/.openhydra/openhydra.yaml` (user-global)
+3. Environment variables (override specific fields)
+
+To enable channels, create `.openhydra/openhydra.yaml` like:
+
+```yaml
+web:
+  host: "127.0.0.1"
+  port: 7070
+
+channels:
+  slack:
+    enabled: false
+  discord:
+    enabled: false
+  whatsapp:
+    enabled: false
+  email:
+    enabled: false
+```
+
+Example: enable Slack + WhatsApp (Baileys):
+```yaml
+channels:
+  slack:
+    enabled: true
+  whatsapp:
+    enabled: true
+    backend: "baileys"
+```
+
+## Channels (Web, Slack, Discord, WhatsApp, Email)
+
+Start all enabled channels with:
+```bash
+uv run openhydra serve
+```
+
+When you submit a task via a channel, progress updates and the final result are delivered back to the same channel thread/DM/conversation by default.
+
+- Web API examples:
+```bash
+# List workflows (requires API key)
+curl -H "X-API-Key: <web.api_key>" http://127.0.0.1:7070/api/v1/workflows
+
+# Stream events (WebSocket)
+npx -y wscat -c "ws://127.0.0.1:7070/api/v1/ws?api_key=<web.api_key>"
+```
+
+- **Web API (default)**: REST + WebSocket event stream at `/api/v1/ws`. `serve` auto-generates `web.api_key` in `~/.openhydra/openhydra.yaml` if missing. Use `X-API-Key: <key>` for REST, and `?api_key=<key>` for WebSocket.
+- **Slack (Socket Mode)**: set `channels.slack.enabled: true`, plus `OPENHYDRA_SLACK_BOT_TOKEN` (`xoxb-...`) and `OPENHYDRA_SLACK_APP_TOKEN` (`xapp-...`). For access control, set `channels.slack.allowed_users` or pre-authorize via `openhydra auth add slack:<U123...>`.
+- **Discord**: set `channels.discord.enabled: true` and `OPENHYDRA_DISCORD_BOT_TOKEN`. Use `/hydra run <task>` in a server where the bot is installed. Restrict with `channels.discord.allowed_users` or `openhydra auth add discord:<user_id>`.
+- **WhatsApp**
+  - **Baileys (QR, local WhatsApp Web)**: set `channels.whatsapp.enabled: true`, `channels.whatsapp.backend: "baileys"`, and install the Node dep: `npm install @whiskeysockets/baileys`. Set `channels.whatsapp.auth_dir` (recommended) to avoid writing WhatsApp auth files into the repo. The QR payload is emitted as an event `whatsapp.qr` with `data.qr_data` on the WebSocket; render it as a QR code and scan in WhatsApp. Restrict with `channels.whatsapp.allowed_phones` or `openhydra auth add whatsapp:<phone>`.
+  - **Cloud API (webhook)**: set `channels.whatsapp.backend: "cloud-api"`, configure `channels.whatsapp.phone_number_id` + `channels.whatsapp.verify_token`, and set `OPENHYDRA_WHATSAPP_ACCESS_TOKEN`. Expose the web server publicly and register the webhook at `https://<public-host>/webhooks/whatsapp`.
+- **Email (IMAP + SMTP)**: install deps with `uv pip install -e ".[email]"`, set `channels.email.enabled: true`, and configure IMAP/SMTP + credentials (env vars like `OPENHYDRA_EMAIL_IMAP_HOST`, `OPENHYDRA_EMAIL_USERNAME`, `OPENHYDRA_EMAIL_PASSWORD`). Actionable emails are submitted as workflows, and terminal results are emailed back to the sender.
+
+## Custom Channels
+
+You can add channels (e.g. SMS, Teams) as external plugins via the `openhydra.channels` Python entry point group. Config for unknown channel keys under `channels:` is loaded into `channels.extras` and passed to the plugin factory.
+
+Example:
+```yaml
+channels:
+  sms:
+    enabled: true
+    permissions:
+      can_submit: true
+      can_read_status: true
+```
+
 ## Architecture
 
 - **Pluggable agents** — Claude, OpenAI, Ollama, or bring your own
 - **Pluggable memory** — SQLite (default), Qdrant, ChromaDB
 - **Pluggable skills** — Filesystem, Git repos, HTTP registries
-- **Dynamic skill generation** — When a skill isn't found on disk, the engine generates it on-the-fly via LLM, scores it with a quality gate, and caches it for reuse
+- **Dynamic skill generation (optional)** — When enabled, a missing skill can be generated on-the-fly via LLM, scored with a quality gate, and cached for reuse
 - **Separate interfaces** — CLI, TUI, Web UI are independent of the core engine
 
 ## Dynamic Skills
@@ -41,11 +179,29 @@ OpenHydra can generate skills at runtime when a workflow references a skill ID t
 ```yaml
 # openhydra.yaml — skill builder config
 skills:
-  builder_enabled: true          # default: true
+  builder_enabled: true          # default: false
   generated_dir: ""              # default: ~/.openhydra/generated_skills/
 ```
 
-Disable with `builder_enabled: false` if you only want hand-authored skills.
+Enable with `builder_enabled: true` if you want on-the-fly generation.
+
+## Documentation
+
+- [README.md](README.md) — install, run, core configuration, and channel setup.
+- [SPEC.md](SPEC.md) — architecture, protocols, and extension APIs.
+- [PLAN.md](PLAN.md) — implementation roadmap and phase status.
+- [CLAUDE.md](CLAUDE.md) — maintainer conventions and project notes.
+- [AGENTS.md](AGENTS.md) — repository contribution and workflow guidelines.
+- [config/roles.yaml](config/roles.yaml) — default role catalog and gate configuration.
+
+## Extension Point Docs
+
+- Channels/plugins: [Custom Channels](README.md#custom-channels), [entry point group](pyproject.toml)
+- Agent providers: [Agent Registry](SPEC.md#32-agent-registry), [custom provider example](SPEC.md#9-extension-points)
+- Skill sources + builder: [Skill Registry](SPEC.md#33-skill-registry), [Dynamic Skills](README.md#dynamic-skills)
+- Memory backends: [Memory Adapter](SPEC.md#34-memory-adapter), [custom memory example](SPEC.md#9-extension-points)
+- Roles + gates: [Role Catalog](SPEC.md#35-role-catalog), [Quality Gates](SPEC.md#36-quality-gates), [default roles](config/roles.yaml)
+- MCP tool servers/templates: [tools config schema](src/openhydra/config.py), [built-in MCP templates](src/openhydra/tools/mcp_templates.py)
 
 ## OpenClaw Integration
 

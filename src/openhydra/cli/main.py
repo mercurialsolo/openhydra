@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
+import yaml
 from rich.console import Console
 from rich.table import Table
+
+if TYPE_CHECKING:
+    from openhydra.config import OpenHydraConfig
 
 app = typer.Typer(
     name="openhydra",
@@ -16,9 +23,90 @@ app = typer.Typer(
 console = Console()
 
 
+DEFAULT_ROLE_TOOLS = ["Read", "Glob", "Grep"]
+DEFAULT_ROLE_DESCRIPTION = "TODO: Describe this role's responsibilities."
+
+
+def _humanize_role_id(role_id: str) -> str:
+    """Convert a role id like `eng.implement` into `Eng Implement`."""
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", " ", role_id).strip()
+    return cleaned.title() or role_id
+
+
+def _split_csv_values(raw: str) -> list[str]:
+    """Parse comma-separated values into a clean list."""
+    return [value.strip() for value in raw.split(",") if value.strip()]
+
+
+def _prompt_text(prompt_text: str, *, default: str = "", required: bool = False) -> str:
+    """Prompt for a single text value."""
+    while True:
+        suffix = f" [{default}]" if default else ""
+        raw = console.input(f"{prompt_text}{suffix}: ").strip()
+        if raw:
+            return raw
+        if default:
+            return default
+        if not required:
+            return ""
+        console.print("[red]This field is required.[/red]")
+
+
+def _prompt_csv(prompt_text: str, *, default: list[str] | None = None) -> list[str]:
+    """Prompt for a comma-separated list."""
+    default_values = default or []
+    default_text = ", ".join(default_values)
+    raw = _prompt_text(prompt_text, default=default_text, required=False)
+    if not raw:
+        return []
+    return _split_csv_values(raw)
+
+
+def _load_roles_document(path: Path) -> tuple[dict, dict[str, dict]]:
+    """Load a roles YAML document and return full doc + roles mapping."""
+    if not path.exists():
+        return {"roles": {}}, {}
+
+    raw_doc = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(raw_doc, dict):
+        raise typer.BadParameter(f"{path} must contain a YAML mapping at the root.")
+
+    raw_roles = raw_doc.get("roles")
+    if raw_roles is None:
+        raw_roles = {}
+    if not isinstance(raw_roles, dict):
+        raise typer.BadParameter(f"{path} must contain a top-level 'roles' mapping.")
+
+    roles: dict[str, dict] = {}
+    for role_key, role_value in raw_roles.items():
+        if not isinstance(role_key, str):
+            raise typer.BadParameter(f"{path} has a non-string role key: {role_key!r}")
+        if not isinstance(role_value, dict):
+            raise typer.BadParameter(f"Role '{role_key}' in {path} must be a mapping.")
+        roles[role_key] = role_value
+
+    return raw_doc, roles
+
+
 def _run_async(coro):
     """Bridge sync typer with async engine."""
     return asyncio.run(coro)
+
+
+def _run_cli(coro) -> None:
+    """Run a CLI coroutine and print user-friendly errors."""
+    try:
+        _run_async(coro)
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        from openhydra.hydra_compat import HydraCompatError
+
+        if isinstance(exc, HydraCompatError):
+            console.print(f"[bold red]Error ({exc.status_code}):[/bold red] {exc.detail}")
+        else:
+            console.print(f"[bold red]Error:[/bold red] {exc}")
+        raise typer.Exit(code=1) from exc
 
 
 async def _create_engine():
@@ -30,6 +118,15 @@ async def _create_engine():
     return engine
 
 
+def _configure_serve_for_web_clients(cfg: OpenHydraConfig, *, host: str, port: int) -> bool:
+    """Ensure `openhydra serve` always exposes the web API for local web clients."""
+    was_enabled = bool(cfg.web.enabled)
+    cfg.web.enabled = True
+    cfg.web.host = host
+    cfg.web.port = port
+    return was_enabled
+
+
 @app.command()
 def run(
     task: str = typer.Argument(help="Task description"),
@@ -38,7 +135,10 @@ def run(
     """Submit a task for multi-agent execution."""
 
     async def _run():
+        from openhydra.hydra_compat import HydraCompatService
+
         engine = await _create_engine()
+        api = HydraCompatService(engine)
         try:
             if watch:
                 from openhydra.events import Event
@@ -49,7 +149,17 @@ def run(
                 engine.events.on_all(on_event)
 
             console.print(f"[bold]Submitting:[/bold] {task}")
-            workflow_id = await engine.submit(task)
+            started = await api.start_workflow(
+                {
+                    "workflow_type": "DynamicWorkflow",
+                    "input": {
+                        "task_description": task,
+                        "submitter": "cli",
+                        "preferred_channel": "hydra_cli",
+                    },
+                }
+            )
+            workflow_id = started["workflow_id"]
             console.print(f"[bold green]Workflow created:[/bold green] {workflow_id}")
 
             if watch:
@@ -57,14 +167,17 @@ def run(
                 bg_task = engine._tasks.get(workflow_id)
                 if bg_task:
                     await bg_task
-                    wf = await engine.get_status(workflow_id)
-                    console.print(f"\n[bold]Status:[/bold] {wf['status']}")
-                    console.print(f"[bold]Cost:[/bold] ${wf['total_cost_usd']:.4f}")
-                    console.print(f"[bold]Tokens:[/bold] {wf['total_tokens']}")
+                    wf = await api.get_workflow(workflow_id)
+                    metrics = wf.get("metrics") or {}
+                    console.print(f"\n[bold]Status:[/bold] {wf.get('status')}")
+                    console.print(
+                        f"[bold]Cost:[/bold] ${float(metrics.get('total_cost_usd') or 0):.4f}"
+                    )
+                    console.print(f"[bold]Tokens:[/bold] {int(metrics.get('total_tokens') or 0)}")
         finally:
             await engine.stop()
 
-    _run_async(_run())
+    _run_cli(_run())
 
 
 @app.command()
@@ -74,30 +187,42 @@ def status(
     """Show workflow status."""
 
     async def _status():
+        from openhydra.hydra_compat import HydraCompatService
+
         engine = await _create_engine()
+        api = HydraCompatService(engine)
         try:
             if workflow_id:
-                wf = await engine.get_status(workflow_id)
-                wf_status = wf["status"]
+                wf = await api.get_workflow(workflow_id)
+                wf_status = str(wf.get("status") or "")
                 wf_status_style = {
-                    "completed": "green",
-                    "executing": "yellow",
-                    "failed": "red",
-                    "cancelled": "red",
-                    "paused": "yellow",
-                    "created": "dim",
+                    "COMPLETED": "green",
+                    "RUNNING": "yellow",
+                    "FAILED": "red",
+                    "CANCELLED": "red",
+                    "PAUSED": "yellow",
+                    "QUEUED": "dim",
+                    "WAITING_FOR_APPROVAL": "yellow",
+                    "WAITING_FOR_CORRECTION": "yellow",
                 }.get(wf_status, "")
-                console.print(f"\n[bold]Workflow:[/bold] {wf['id']}")
+                metrics = wf.get("metrics") or {}
+                wf_input = wf.get("input") if isinstance(wf.get("input"), dict) else {}
+                task_desc = str(
+                    wf_input.get("task_description")
+                    or wf_input.get("description")
+                    or wf_input.get("task")
+                    or ""
+                )
+
+                console.print(f"\n[bold]Workflow:[/bold] {wf.get('id')}")
                 console.print(
                     f"[bold]Status:[/bold] [{wf_status_style}]{wf_status}[/{wf_status_style}]"
                 )
-                console.print(f"[bold]Task:[/bold] {wf['input']}")
-                console.print(f"[bold]Cost:[/bold] ${wf['total_cost_usd']:.4f}")
-                console.print(f"[bold]Tokens:[/bold] {wf['total_tokens']}")
-                if wf.get("paused_at"):
-                    console.print(f"[bold]Paused at:[/bold] {wf['paused_at']}")
-                    if wf.get("paused_by"):
-                        console.print(f"[bold]Paused by:[/bold] {wf['paused_by']}")
+                console.print(f"[bold]Task:[/bold] {task_desc}")
+                console.print(
+                    f"[bold]Cost:[/bold] ${float(metrics.get('total_cost_usd') or 0):.4f}"
+                )
+                console.print(f"[bold]Tokens:[/bold] {int(metrics.get('total_tokens') or 0)}")
 
                 if wf.get("steps"):
                     table = Table(title="Steps")
@@ -106,23 +231,25 @@ def status(
                     table.add_column("Status")
                     table.add_column("Cost")
 
-                    for step in wf["steps"]:
+                    for idx, step in enumerate(wf["steps"], start=1):
                         status_style = {
                             "completed": "green",
                             "running": "yellow",
                             "failed": "red",
                             "pending": "dim",
                             "skipped": "dim",
+                            "waiting_approval": "yellow",
                         }.get(step["status"], "")
                         table.add_row(
-                            str(step["ordinal"]),
-                            step["role_id"],
+                            str(idx),
+                            str(step.get("agent_role") or step.get("name") or "agent"),
                             f"[{status_style}]{step['status']}[/{status_style}]",
-                            f"${step['cost_usd']:.4f}",
+                            f"${float(step.get('cost_usd') or 0):.4f}",
                         )
                     console.print(table)
             else:
-                workflows = await engine.list_workflows()
+                listing = await api.list_workflows()
+                workflows = listing.get("workflows", [])
                 if not workflows:
                     console.print("[dim]No workflows found.[/dim]")
                     return
@@ -135,18 +262,26 @@ def status(
                 table.add_column("Created")
 
                 for wf in workflows:
+                    wf_input = wf.get("input") if isinstance(wf.get("input"), dict) else {}
+                    task_desc = str(
+                        wf_input.get("task_description")
+                        or wf_input.get("description")
+                        or wf_input.get("task")
+                        or ""
+                    )
+                    metrics = wf.get("metrics") or {}
                     table.add_row(
-                        wf["id"],
-                        wf["status"],
-                        wf["input"][:50],
-                        f"${wf['total_cost_usd']:.4f}",
-                        str(wf["created_at"]),
+                        str(wf.get("id")),
+                        str(wf.get("status")),
+                        task_desc[:50],
+                        f"${float(metrics.get('total_cost_usd') or 0):.4f}",
+                        str(wf.get("created_at")),
                     )
                 console.print(table)
         finally:
             await engine.stop()
 
-    _run_async(_status())
+    _run_cli(_status())
 
 
 @app.command(name="list")
@@ -163,14 +298,17 @@ def approve(
     """Approve a pending request."""
 
     async def _approve():
+        from openhydra.hydra_compat import HydraCompatService
+
         engine = await _create_engine()
+        api = HydraCompatService(engine)
         try:
-            await engine.approve(approval_id)
+            await api.approve_inbox_item(approval_id, {"decision": "approved"})
             console.print(f"[bold green]Approved:[/bold green] {approval_id}")
         finally:
             await engine.stop()
 
-    _run_async(_approve())
+    _run_cli(_approve())
 
 
 @app.command()
@@ -181,14 +319,17 @@ def reject(
     """Reject a pending request."""
 
     async def _reject():
+        from openhydra.hydra_compat import HydraCompatService
+
         engine = await _create_engine()
+        api = HydraCompatService(engine)
         try:
-            await engine.reject(approval_id, reason)
+            await api.reject_inbox_item(approval_id, reason)
             console.print(f"[bold red]Rejected:[/bold red] {approval_id}")
         finally:
             await engine.stop()
 
-    _run_async(_reject())
+    _run_cli(_reject())
 
 
 @app.command(name="pause")
@@ -198,14 +339,20 @@ def pause_workflow(
     """Pause a running workflow."""
 
     async def _pause():
+        from openhydra.hydra_compat import HydraCompatService
+
         engine = await _create_engine()
+        api = HydraCompatService(engine)
         try:
-            await engine.pause(workflow_id)
-            console.print(f"[bold yellow]Paused:[/bold yellow] {workflow_id}")
+            result = await api.control_workflow(workflow_id, "pause")
+            console.print(
+                f"[bold yellow]Pause:[/bold yellow] {workflow_id} "
+                f"({result.get('status', 'unknown')})"
+            )
         finally:
             await engine.stop()
 
-    _run_async(_pause())
+    _run_cli(_pause())
 
 
 @app.command(name="resume")
@@ -216,7 +363,10 @@ def resume_workflow(
     """Resume a paused workflow."""
 
     async def _resume():
+        from openhydra.hydra_compat import HydraCompatService
+
         engine = await _create_engine()
+        api = HydraCompatService(engine)
         try:
             if watch:
                 from openhydra.events import Event
@@ -226,21 +376,27 @@ def resume_workflow(
 
                 engine.events.on_all(on_event)
 
-            await engine.resume(workflow_id)
-            console.print(f"[bold green]Resumed:[/bold green] {workflow_id}")
+            result = await api.control_workflow(workflow_id, "resume")
+            console.print(
+                f"[bold green]Resume:[/bold green] {workflow_id} "
+                f"({result.get('status', 'unknown')})"
+            )
 
             if watch:
                 bg_task = engine._tasks.get(workflow_id)
                 if bg_task:
                     await bg_task
-                    wf = await engine.get_status(workflow_id)
-                    console.print(f"\n[bold]Status:[/bold] {wf['status']}")
-                    console.print(f"[bold]Cost:[/bold] ${wf['total_cost_usd']:.4f}")
-                    console.print(f"[bold]Tokens:[/bold] {wf['total_tokens']}")
+                    wf = await api.get_workflow(workflow_id)
+                    metrics = wf.get("metrics") or {}
+                    console.print(f"\n[bold]Status:[/bold] {wf.get('status')}")
+                    console.print(
+                        f"[bold]Cost:[/bold] ${float(metrics.get('total_cost_usd') or 0):.4f}"
+                    )
+                    console.print(f"[bold]Tokens:[/bold] {int(metrics.get('total_tokens') or 0)}")
         finally:
             await engine.stop()
 
-    _run_async(_resume())
+    _run_cli(_resume())
 
 
 @app.command(name="cancel")
@@ -250,14 +406,19 @@ def cancel_workflow(
     """Cancel a running or paused workflow."""
 
     async def _cancel():
+        from openhydra.hydra_compat import HydraCompatService
+
         engine = await _create_engine()
+        api = HydraCompatService(engine)
         try:
-            await engine.cancel(workflow_id)
-            console.print(f"[bold red]Cancelled:[/bold red] {workflow_id}")
+            result = await api.control_workflow(workflow_id, "cancel")
+            console.print(
+                f"[bold red]Cancel:[/bold red] {workflow_id} ({result.get('status', 'unknown')})"
+            )
         finally:
             await engine.stop()
 
-    _run_async(_cancel())
+    _run_cli(_cancel())
 
 
 @app.command()
@@ -291,7 +452,7 @@ def skills() -> None:
         finally:
             await engine.stop()
 
-    _run_async(_skills())
+    _run_cli(_skills())
 
 
 @app.command()
@@ -311,8 +472,7 @@ def serve(
         from openhydra.config import ensure_api_key, load_config
 
         cfg = load_config()
-        cfg.web.host = host
-        cfg.web.port = port
+        was_web_enabled = _configure_serve_for_web_clients(cfg, host=host, port=port)
         ensure_api_key(cfg)
 
         engine = await _create_engine()
@@ -335,6 +495,11 @@ def serve(
 
         try:
             await registry.start_all()
+            if not was_web_enabled:
+                console.print(
+                    "[dim]Web channel was disabled in config; enabled for "
+                    "`openhydra serve`.[/dim]"
+                )
             channels = [ch.name for ch in registry.channels]
             names = ", ".join(channels) or "none"
             console.print(f"[bold green]OpenHydra serving[/bold green] — channels: {names}")
@@ -388,9 +553,9 @@ def serve(
             console.print(f"[bold red]Max restarts ({max_restarts}) reached, exiting[/bold red]")
 
     if daemon:
-        _run_async(_serve_daemon())
+        _run_cli(_serve_daemon())
     else:
-        _run_async(_serve())
+        _run_cli(_serve())
 
 
 # --- Skill review commands ---
@@ -425,7 +590,7 @@ def skill_review() -> None:
         finally:
             await engine.stop()
 
-    _run_async(_review())
+    _run_cli(_review())
 
 
 @app.command(name="skill-approve")
@@ -442,13 +607,12 @@ def skill_approve(
                 console.print(f"[bold green]Approved:[/bold green] {skill_id}")
             else:
                 console.print(
-                    f"[bold red]Failed:[/bold red] "
-                    f"Skill '{skill_id}' not found or not pending.",
+                    f"[bold red]Failed:[/bold red] Skill '{skill_id}' not found or not pending.",
                 )
         finally:
             await engine.stop()
 
-    _run_async(_approve())
+    _run_cli(_approve())
 
 
 @app.command(name="skill-reject")
@@ -465,19 +629,21 @@ def skill_reject(
                 console.print(f"[bold red]Rejected:[/bold red] {skill_id}")
             else:
                 console.print(
-                    f"[bold red]Failed:[/bold red] "
-                    f"Skill '{skill_id}' not found or not pending.",
+                    f"[bold red]Failed:[/bold red] Skill '{skill_id}' not found or not pending.",
                 )
         finally:
             await engine.stop()
 
-    _run_async(_reject())
+    _run_cli(_reject())
 
 
 # --- Auth commands ---
 
 auth_app = typer.Typer(name="auth", help="Manage channel authorization.")
 app.add_typer(auth_app)
+
+agent_app = typer.Typer(name="agent", help="Manage role agents.")
+app.add_typer(agent_app)
 
 
 @auth_app.command(name="confirm")
@@ -502,7 +668,7 @@ def auth_confirm(
         finally:
             await engine.stop()
 
-    _run_async(_confirm())
+    _run_cli(_confirm())
 
 
 @auth_app.command(name="list")
@@ -539,7 +705,7 @@ def auth_list() -> None:
         finally:
             await engine.stop()
 
-    _run_async(_list())
+    _run_cli(_list())
 
 
 @auth_app.command(name="add")
@@ -565,7 +731,7 @@ def auth_add(
         finally:
             await engine.stop()
 
-    _run_async(_add())
+    _run_cli(_add())
 
 
 @auth_app.command(name="revoke")
@@ -593,7 +759,199 @@ def auth_revoke(
         finally:
             await engine.stop()
 
-    _run_async(_revoke())
+    _run_cli(_revoke())
+
+
+@agent_app.command(name="scaffold")
+def scaffold_agent(
+    role_id: str | None = typer.Argument(None, help="Role ID to create, e.g. eng.docs"),
+    roles_file: Path = typer.Option(
+        Path("config/roles.yaml"),
+        "--roles-file",
+        "-f",
+        help="Path to roles.yaml.",
+    ),
+    name: str | None = typer.Option(None, "--name", help="Role display name."),
+    description: str = typer.Option(
+        DEFAULT_ROLE_DESCRIPTION,
+        "--description",
+        help="Role description.",
+    ),
+    objectives: list[str] | None = typer.Option(
+        None,
+        "--objective",
+        "-o",
+        help="Role objective. Repeat to add more.",
+    ),
+    provider: str | None = typer.Option(
+        None,
+        "--provider",
+        help="Agent provider name. Omit to use global default provider.",
+    ),
+    model: str = typer.Option(
+        "claude-sonnet-4-5-20250929",
+        "--model",
+        help="Model to use for this role.",
+    ),
+    skill_packs: list[str] | None = typer.Option(
+        None,
+        "--skill-pack",
+        "-s",
+        help="Skill pack id. Repeat to add more.",
+    ),
+    tools: list[str] | None = typer.Option(
+        None,
+        "--tool",
+        "-t",
+        help="Allowed tool name. Repeat to add more.",
+    ),
+    context_reads: list[str] | None = typer.Option(
+        None,
+        "--context-read",
+        "-c",
+        help="Context/data source this role can read. Repeat to add more.",
+    ),
+    output_schema: str | None = typer.Option(
+        None,
+        "--output-schema",
+        help="Optional output schema name from schemas/<name>.json.",
+    ),
+    quality_threshold: int | None = typer.Option(
+        None,
+        "--quality-threshold",
+        min=1,
+        max=40,
+        help="If set, adds a quality gate with this threshold.",
+    ),
+    tests_gate: bool = typer.Option(
+        False,
+        "--tests-gate",
+        help="Add a tests_pass gate.",
+    ),
+    approval_gate: bool = typer.Option(
+        False,
+        "--approval-gate",
+        help="Add an approval gate.",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite an existing role if the id already exists.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Print generated YAML without writing to disk.",
+    ),
+    interactive: bool = typer.Option(
+        False,
+        "--interactive",
+        "-i",
+        help="Prompt for role fields interactively.",
+    ),
+) -> None:
+    """Scaffold a new role agent entry in roles.yaml."""
+    doc, roles = _load_roles_document(roles_file)
+
+    if interactive and not role_id:
+        role_id = _prompt_text("Role ID (example: eng.docs)", required=True)
+    if not role_id:
+        console.print(
+            "[bold red]Error:[/bold red] "
+            "Role ID is required unless --interactive is set."
+        )
+        raise typer.Exit(code=1)
+
+    if role_id in roles and not force:
+        console.print(
+            f"[bold red]Error:[/bold red] Role '{role_id}' already exists in {roles_file}. "
+            "Use --force to overwrite."
+        )
+        raise typer.Exit(code=1)
+
+    generated_name = name or _humanize_role_id(role_id)
+    generated_description = description
+    generated_objectives = objectives or []
+    generated_tools = tools or list(DEFAULT_ROLE_TOOLS)
+    generated_skill_packs = skill_packs or []
+    generated_context_reads = context_reads or []
+
+    if interactive:
+        generated_name = _prompt_text(
+            "Agent name",
+            default=generated_name,
+        )
+        description_default = (
+            generated_description if generated_description != DEFAULT_ROLE_DESCRIPTION else ""
+        )
+        generated_description = _prompt_text(
+            "Agent description",
+            default=description_default,
+        ) or DEFAULT_ROLE_DESCRIPTION
+        generated_objectives = _prompt_csv(
+            "Agent goals/objectives (comma-separated)",
+            default=generated_objectives,
+        )
+        generated_skill_packs = _prompt_csv(
+            "Skills / skill packs (comma-separated)",
+            default=generated_skill_packs,
+        )
+        generated_tools = _prompt_csv(
+            "Tools this agent can access (comma-separated)",
+            default=generated_tools,
+        )
+        generated_context_reads = _prompt_csv(
+            "Context / data this agent can read (comma-separated)",
+            default=generated_context_reads,
+        )
+
+    gates: list[dict[str, str | int]] = []
+    if quality_threshold is not None:
+        gates.append({"type": "quality", "threshold": quality_threshold})
+    if tests_gate:
+        gates.append({"type": "tests_pass"})
+    if approval_gate:
+        gates.append({"type": "approval"})
+
+    role_payload: dict[str, object] = {
+        "name": generated_name,
+        "description": generated_description,
+        "model": model,
+        "skill_packs": generated_skill_packs,
+        "allowed_tools": generated_tools,
+        "budget": {
+            "max_tokens": 100_000,
+            "max_tool_calls": 200,
+            "max_duration_minutes": 30,
+        },
+        "context_budget": {
+            "skills_pct": 35,
+            "memory_pct": 10,
+            "reasoning_pct": 55,
+        },
+    }
+    if generated_objectives:
+        role_payload["objectives"] = generated_objectives
+    if generated_context_reads:
+        role_payload["context_reads"] = generated_context_reads
+    if provider:
+        role_payload["provider"] = provider
+    if output_schema:
+        role_payload["output_schema"] = output_schema
+    if gates:
+        role_payload["gates"] = gates
+
+    if dry_run:
+        preview = yaml.safe_dump({"roles": {role_id: role_payload}}, sort_keys=False).rstrip()
+        console.print(preview)
+        return
+
+    roles[role_id] = role_payload
+    doc["roles"] = roles
+    roles_file.parent.mkdir(parents=True, exist_ok=True)
+    roles_file.write_text(yaml.safe_dump(doc, sort_keys=False))
+    console.print(f"[bold green]Scaffolded role:[/bold green] {role_id}")
+    console.print(f"[dim]Updated {roles_file}[/dim]")
 
 
 @app.command()

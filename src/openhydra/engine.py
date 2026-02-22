@@ -137,22 +137,79 @@ class Engine:
 
         await self.db.close()
 
-    async def submit(self, task: str) -> str:
-        """Submit a task for execution. Returns workflow ID."""
+    async def submit(
+        self,
+        task: str,
+        *,
+        session_key: str | None = None,
+        channel: str = "",
+        user_id: str = "",
+        user_name: str = "",
+    ) -> str:
+        """Submit a task for execution. Returns workflow ID.
+
+        If *session_key* is provided, the workflow is tagged with session metadata
+        and the user message is stored in per-session memory for conversational continuity.
+        """
         if not self.workflow_engine or not self.planner:
             raise RuntimeError("Engine not started. Call start() first.")
 
+        workflow_config: dict[str, Any] = {}
+        if session_key:
+            workflow_config.update({
+                "session_key": session_key,
+                "channel": channel,
+                "user_id": user_id,
+                "user_name": user_name,
+            })
+
         # Plan the task
-        steps = await self.planner.plan(task)
+        steps = await self.planner.plan(task, context=workflow_config or None)
 
         # Create workflow
-        workflow_id = await self.workflow_engine.create_workflow(task, steps)
+        workflow_id = await self.workflow_engine.create_workflow(
+            task, steps, config=workflow_config or None,
+        )
+
+        # Store user message in per-session memory (if enabled)
+        if session_key:
+            await self._store_session_memory(
+                session_key=session_key,
+                content=f"USER: {task}",
+                metadata={
+                    "type": "user_message",
+                    "workflow_id": workflow_id,
+                    "channel": channel,
+                    "user_id": user_id,
+                    "user_name": user_name,
+                },
+            )
 
         # Execute in background
         bg_task = asyncio.create_task(self.workflow_engine.execute_workflow(workflow_id))
         self._tasks[workflow_id] = bg_task
 
         return workflow_id
+
+    async def _store_session_memory(
+        self,
+        *,
+        session_key: str,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Best-effort per-session memory storage."""
+        if not self.memory:
+            return
+        collection = f"session:{session_key}"
+        # Keep session memory compact (avoid huge prompts on later turns)
+        if len(content) > 1500:
+            content = content[:1500] + "..."
+        try:
+            await self.memory.store(collection=collection, content=content, metadata=metadata or {})
+        except Exception:
+            # Memory should never break workflow submission.
+            return
 
     async def get_status(self, workflow_id: str) -> dict[str, Any]:
         """Get current status of a workflow."""
