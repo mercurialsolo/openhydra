@@ -1,5 +1,9 @@
 # OpenHydra
 
+[![PyPI Version](https://img.shields.io/pypi/v/openhydra)](https://pypi.org/project/openhydra/)
+[![PyPI Python Versions](https://img.shields.io/pypi/pyversions/openhydra)](https://pypi.org/project/openhydra/)
+[![GHCR Image](https://img.shields.io/badge/ghcr-openhydra-2496ED?logo=docker&logoColor=white)](https://github.com/mercurialsolo/openhydra/pkgs/container/openhydra)
+
 Lightweight, local-first multi-agent orchestration. One command, no Docker, no external services.
 
 ## Quick Start
@@ -53,6 +57,11 @@ PyPI publishing is automated via GitHub Actions (`.github/workflows/publish.yml`
 Trusted Publishing must be configured once in both PyPI and TestPyPI for this repository.
 Use owner `mercurialsolo`, repository `openhydra`, workflow `publish.yml`, and environments
 `pypi` / `testpypi`.
+
+Published package links:
+
+- PyPI: [openhydra](https://pypi.org/project/openhydra/)
+- Container image (GHCR): [ghcr.io/mercurialsolo/openhydra](https://github.com/mercurialsolo/openhydra/pkgs/container/openhydra)
 
 ## OpenHydra is best for work that needs:
 
