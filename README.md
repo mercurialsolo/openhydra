@@ -24,6 +24,8 @@ openhydra run "Build a Python CLI that converts CSV to JSON"
 
 Need channel setup, provider configuration, advanced options, or source/developer install?
 See [SETUP.md](SETUP.md).
+For embedding OpenHydra into your own app via REST/WebSocket API + auth, see
+[API and Auth Guide](docs/api-auth.md).
 
 ## OpenHydra is best for work that needs:
 
@@ -71,6 +73,7 @@ Step-by-step channel setup guides:
 - [Slack setup](docs/channels/slack.md)
 - [WhatsApp setup](docs/channels/whatsapp.md)
 - [Discord setup](docs/channels/discord.md)
+- [API and auth integration guide](docs/api-auth.md)
 
 Example channel config:
 

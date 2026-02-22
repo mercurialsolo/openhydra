@@ -227,6 +227,7 @@ tools:
 ### 6) `web`
 
 Web API and WebSocket server settings.
+For product integration examples (REST, auth, Docker), see [docs/api-auth.md](docs/api-auth.md).
 
 ```yaml
 web:
