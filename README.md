@@ -48,35 +48,6 @@ uv run openhydra doctor
 uv run openhydra doctor --strict
 ```
 
-## Planning On The Fly (No Manual Plan File)
-
-You do not need to write a plan first. Submit the outcome directly:
-
-```bash
-uv run openhydra run "Migrate this Flask API to FastAPI without breaking existing endpoints" --watch
-```
-
-OpenHydra then:
-
-1. Uses the `planner` role to generate a JSON step graph (`role_id`, `instructions`, `depends_on`)
-2. Persists workflow + steps to SQLite before running (for durability/recovery)
-3. Executes ready steps based on dependencies (independent branches can run concurrently)
-4. Applies role gates (quality/tests/approval) between steps
-5. Reports progress/events and final output
-
-For that FastAPI migration prompt, a typical generated plan could look like:
-
-1. `eng.init`: inventory current Flask routes and migration constraints
-2. `eng.implement`: port app structure and handlers to FastAPI
-3. `test.code`: run/update tests and validate endpoint compatibility
-4. `pm.review`: verify scope completion and release readiness
-
-To inspect the generated plan and step-by-step progress:
-
-```bash
-uv run openhydra status <workflow_id>
-```
-
 ## What OpenHydra Helps You Achieve
 
 OpenHydra is strongest for work that needs:
@@ -142,6 +113,35 @@ How to talk to agents:
 - **Slack**: send a DM to the bot or `@mention` it in a channel with your task text
 - **WhatsApp**: send a normal message as the task text; control commands like `approve`, `reject <reason>`, `pause`, `resume`, `cancel` are supported. On first setup, `openhydra serve` prints the pairing QR in terminal.
 - **Discord**: run `/hydra` with `action=run` and your task as `argument`
+
+## Planning On The Fly (No Manual Plan File)
+
+You do not need to write a plan first. Submit the outcome directly:
+
+```bash
+uv run openhydra run "Migrate this Flask API to FastAPI without breaking existing endpoints" --watch
+```
+
+OpenHydra then:
+
+1. Uses the `planner` role to generate a JSON step graph (`role_id`, `instructions`, `depends_on`)
+2. Persists workflow + steps to SQLite before running (for durability/recovery)
+3. Executes ready steps based on dependencies (independent branches can run concurrently)
+4. Applies role gates (quality/tests/approval) between steps
+5. Reports progress/events and final output
+
+For that FastAPI migration prompt, a typical generated plan could look like:
+
+1. `eng.init`: inventory current Flask routes and migration constraints
+2. `eng.implement`: port app structure and handlers to FastAPI
+3. `test.code`: run/update tests and validate endpoint compatibility
+4. `pm.review`: verify scope completion and release readiness
+
+To inspect the generated plan and step-by-step progress:
+
+```bash
+uv run openhydra status <workflow_id>
+```
 
 ## Contributing
 
