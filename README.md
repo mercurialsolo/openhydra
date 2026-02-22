@@ -55,24 +55,29 @@ uv run openhydra doctor --strict
 - using multiple tools (code, tests, docs, browser/search, channels)
 - selection of the right role, tools, and skills instead of one fixed script
 
-Examples:
+Real tasks by group:
 
+Personal planning and assistant tasks:
+- `"Coordinate a multi-city business trip with budget/time constraints and produce a day-by-day itinerary"`
+- `"Build a 90-day personal execution plan with weekly goals, risks, and accountability checkpoints"`
+- `"Plan a month of travel, health, and admin tasks around fixed calendar constraints and priorities"`
+
+Work tasks: research and decision support first:
+- `"Research competitors in the US billing software market, compare pricing/positioning, and produce a GTM brief with sources"`
+- `"Analyze customer feedback across support channels, cluster churn drivers, and propose top retention experiments"`
+- `"Map legal/compliance considerations for launching an AI feature, summarize risk areas, and draft counsel questions"`
+- `"Assess economic and regulatory opportunity across target regions and recommend where to expand next quarter"`
+- `"Compare open-source eval frameworks for LLM apps, rank tradeoffs, and produce a recommendation memo with links"`
+- `"Review open GitHub issues, cluster duplicates/themes, and propose a prioritized sprint plan"`
+
+Work tasks: product development and coding execution:
+- `"Define v1 scope for a customer portal, set success metrics, and sequence a cross-functional launch timeline"`
+- `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
 - `"Add OAuth login with Google and GitHub, wire session handling, and add tests"`
 - `"Migrate this Flask API to FastAPI without breaking existing endpoints"`
 - `"Find and fix the intermittent checkout timeout and add regression coverage"`
-- `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
-- `"Compare open-source eval frameworks for LLM apps, rank tradeoffs, and produce a recommendation memo with links"`
 - `"Audit dependencies for known CVEs, patch low-risk updates, and verify with tests"`
-- `"Review open GitHub issues, cluster duplicates/themes, and propose a prioritized sprint plan"`
 - `"Create a weekly maintenance report covering test health, dependency drift, and release readiness"`
-- `"Turn customer interviews and support tickets into a prioritized product roadmap with milestones and risks"`
-- `"Define v1 scope for a customer portal, set success metrics, and sequence a cross-functional launch timeline"`
-- `"Research competitors in the US billing software market, compare pricing/positioning, and produce a GTM brief with sources"`
-- `"Analyze customer feedback across support channels, cluster churn drivers, and propose top retention experiments"`
-- `"Build a 90-day operating plan (product, hiring, partnerships) with weekly checkpoints and risk tracking"`
-- `"Coordinate a multi-city business trip with budget/time constraints and produce an actionable day-by-day itinerary"`
-- `"Map legal/compliance considerations for launching an AI feature, summarize risk areas, and draft counsel questions"`
-- `"Assess economic and regulatory opportunity across target regions and recommend where to expand next quarter"`
 
 ## Talk To OpenHydra Agents From Any Channel
 
