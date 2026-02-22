@@ -85,6 +85,39 @@ To inspect the generated plan and step-by-step progress:
 uv run openhydra status <workflow_id>
 ```
 
+## Talk To OpenHydra Agents From Any Channel
+
+OpenHydra runs one orchestration engine and lets you talk to it from multiple channels.
+You can submit work from Web, WhatsApp, or Slack, and get progress/final updates back in that channel.
+
+Basic flow:
+
+1. Enable the channels you want in `.openhydra/openhydra.yaml`
+2. Start the server with `uv run openhydra serve`
+3. Send your task from your preferred channel
+
+Example channel config:
+
+```yaml
+web:
+  enabled: true
+  host: "127.0.0.1"
+  port: 7070
+
+channels:
+  slack:
+    enabled: true
+  whatsapp:
+    enabled: true
+    backend: "baileys" # or "cloud-api"
+```
+
+How to talk to agents:
+
+- **Web**: submit tasks via REST (`POST /api/v1/workflows`) and watch events on WebSocket (`/api/v1/ws`)
+- **Slack**: send a DM to the bot or `@mention` it in a channel with your task text
+- **WhatsApp**: send a normal message as the task text; control commands like `approve`, `reject <reason>`, `pause`, `resume`, `cancel` are supported
+
 ## Contributing
 
 See `CONTRIBUTING.md` for the contributor workflow, checks, and PR requirements.
@@ -135,6 +168,13 @@ When you submit a task via a channel, progress updates and the final result are 
 
 - Web API examples:
 ```bash
+# Submit a task
+curl -X POST \
+  -H "X-API-Key: <web.api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{"task":"Implement OAuth login with tests"}' \
+  http://127.0.0.1:7070/api/v1/workflows
+
 # List workflows (requires API key)
 curl -H "X-API-Key: <web.api_key>" http://127.0.0.1:7070/api/v1/workflows
 
