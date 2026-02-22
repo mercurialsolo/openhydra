@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -12,6 +13,12 @@ from typer.testing import CliRunner
 from openhydra.cli.main import DoctorCheck, _configure_serve_for_web_clients, _run_cli, app
 
 runner = CliRunner()
+
+
+def _normalize_help_output(text: str) -> str:
+    """Strip ANSI escape codes and zero-width chars from rich help output."""
+    text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+    return text.replace("\u200b", "")
 
 
 def test_help() -> None:
@@ -96,13 +103,13 @@ def test_reject_command_help() -> None:
 def test_init_command_help() -> None:
     result = runner.invoke(app, ["init", "--help"])
     assert result.exit_code == 0
-    assert "--quick" in result.output
+    assert re.search(r"--\s*quick\b", _normalize_help_output(result.output))
 
 
 def test_onboard_command_help() -> None:
     result = runner.invoke(app, ["onboard", "--help"])
     assert result.exit_code == 0
-    assert "--full" in result.output
+    assert re.search(r"--\s*full\b", _normalize_help_output(result.output))
 
 
 def test_init_command_passes_quick_flag() -> None:
@@ -132,7 +139,7 @@ def test_onboard_full_mode_uses_full_wizard() -> None:
 def test_doctor_command_help() -> None:
     result = runner.invoke(app, ["doctor", "--help"])
     assert result.exit_code == 0
-    assert "--strict" in result.output
+    assert re.search(r"--\s*strict\b", _normalize_help_output(result.output))
 
 
 def test_doctor_command_success_exit_code() -> None:
