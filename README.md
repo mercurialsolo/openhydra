@@ -44,7 +44,7 @@ See [SETUP.md](SETUP.md).
 
 - planning with dependencies, checks, and retries
 - using multiple tools (code, tests, docs, browser/search, channels)
-- selection of the right role, tools, and skills instead of one fixed script
+- selecting the right role, tools, and skills instead of one fixed script
 
 Personal planning and assistant tasks:
 - `"Plan my Tokyo trip from May 12-20: flights from SFO, vegetarian options near Shinjuku, and a day-by-day itinerary under $3,500"`
