@@ -52,6 +52,55 @@ uv run openhydra doctor --strict
 uv run openhydra serve
 ```
 
+### Path C: Slack/Email Auto-Response + Browser Research
+
+Use this when you want OpenHydra to ingest inbound Slack/email tasks, do web/browser
+research, and post results back to the originating channel.
+
+```yaml
+# ~/.openhydra/openhydra.yaml
+agents:
+  default_provider: "claude-sdk"   # recommended for MCP browser/search orchestration
+
+tools:
+  templates:
+    browser: ["playwright"]
+    search: "duckduckgo"
+
+channels:
+  slack:
+    enabled: true
+  email:
+    enabled: true
+    imap_host: "imap.example.com"
+    smtp_host: "smtp.example.com"
+    username: "agent@example.com"
+    auth_method: "password"
+    poll_interval_seconds: 60
+    allowed_senders: ["your-company.com"]
+```
+
+```bash
+# Required channel credentials
+export OPENHYDRA_SLACK_BOT_TOKEN=...
+export OPENHYDRA_SLACK_APP_TOKEN=...
+export OPENHYDRA_EMAIL_PASSWORD=...
+
+# Optional for provider auth (if needed in your environment)
+export ANTHROPIC_API_KEY=...
+
+uv pip install -e ".[all]"
+uv run openhydra doctor --strict
+uv run openhydra serve
+```
+
+Notes:
+
+1. Slack DMs/@mentions are submitted as workflows and replies are posted in thread.
+2. Email polls inbox, classifies actionable messages, submits workflows, and emails terminal results.
+3. Browser/search templates resolve to MCP tools used by role tool aliases (`WebSearch`, `BrowserNavigate`, etc.).
+4. Default role catalog includes `research` for web/browser-heavy tasks.
+
 ## What Onboarding Creates
 
 `openhydra onboard` / `openhydra init` creates and/or updates:
@@ -316,6 +365,15 @@ This file defines role-level behavior:
 - gates
 
 Use `openhydra agent scaffold ...` to add custom roles.
+
+Default roles include:
+
+1. `planner` (task decomposition)
+2. `eng.init` (initial setup/planning)
+3. `research` (web + browser research)
+4. `eng.implement` (implementation)
+5. `test.code` (validation/testing)
+6. `pm.prd` / `pm.review` (product framing/review)
 
 ### 3) Skills
 

@@ -79,6 +79,16 @@ Examples of plan-heavy tasks:
   - `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
 - **Cross-cutting upgrades**
   - `"Upgrade to Pydantic v2, fix breaking changes, and verify CLI behavior"`
+- **Research briefs with traceable sources**
+  - `"Compare open-source eval frameworks for LLM apps, rank tradeoffs, and produce a recommendation memo with links"`
+- **Security and dependency maintenance**
+  - `"Audit dependencies for known CVEs, propose a prioritized remediation plan, and patch low-risk updates with tests"`
+- **CI and quality maintenance**
+  - `"Analyze flaky tests from the last 30 runs, identify root causes, and produce a stabilization plan with quick wins"`
+- **Backlog and issue triage**
+  - `"Review open GitHub issues, cluster duplicates/themes, and propose a prioritized execution plan for this sprint"`
+- **Ongoing project operations**
+  - `"Create a weekly maintenance report covering test health, dependency drift, and release readiness with actionable next steps"`
 
 ## Planning On The Fly (No Manual Plan File)
 

@@ -288,7 +288,7 @@ def test_agent_scaffold_interactive_collects_objectives_and_context(tmp_path) ->
             "--interactive",
         ],
         input=(
-            "eng.research\n"
+            "research\n"
             "Research Agent\n"
             "Investigates implementation options\n"
             "identify risks, compare approaches\n"
@@ -300,7 +300,7 @@ def test_agent_scaffold_interactive_collects_objectives_and_context(tmp_path) ->
 
     assert result.exit_code == 0
     document = yaml.safe_load(roles_file.read_text())
-    role = document["roles"]["eng.research"]
+    role = document["roles"]["research"]
     assert role["name"] == "Research Agent"
     assert role["description"] == "Investigates implementation options"
     assert role["objectives"] == ["identify risks", "compare approaches"]
