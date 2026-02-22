@@ -46,23 +46,6 @@ uv run openhydra agent setup --interactive
 Need full setup and configuration details (all settings, env vars, and customization points)?
 See [SETUP.md](SETUP.md).
 
-## Release
-
-PyPI publishing is automated via GitHub Actions (`.github/workflows/publish.yml`):
-
-1. Publish to TestPyPI manually: run `Publish` workflow with input `repository=testpypi`.
-2. Publish to PyPI manually: run `Publish` workflow with input `repository=pypi`.
-3. Publish to PyPI from a tag: push a tag like `v0.1.0` (must match `pyproject.toml` version).
-
-Trusted Publishing must be configured once in both PyPI and TestPyPI for this repository.
-Use owner `mercurialsolo`, repository `openhydra`, workflow `publish.yml`, and environments
-`pypi` / `testpypi`.
-
-Published package links:
-
-- PyPI: [openhydra](https://pypi.org/project/openhydra/)
-- Container image (GHCR): [ghcr.io/mercurialsolo/openhydra](https://github.com/mercurialsolo/openhydra/pkgs/container/openhydra)
-
 ## OpenHydra is best for work that needs:
 
 
