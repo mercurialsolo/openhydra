@@ -1,6 +1,7 @@
 # Discord Setup
 
 Use this guide to connect OpenHydra to Discord.
+If you only need REST/WebSocket app integration (no Discord), use [API and Auth Guide](../api-auth.md).
 
 ## Prerequisites
 

@@ -1,6 +1,7 @@
 # WhatsApp Setup
 
 Use this guide to connect OpenHydra to WhatsApp.
+If you only need REST/WebSocket app integration (no WhatsApp), use [API and Auth Guide](../api-auth.md).
 
 ### Prerequisites
 

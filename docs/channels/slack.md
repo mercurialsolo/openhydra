@@ -1,6 +1,7 @@
 # Slack Setup (Socket Mode)
 
 Use this guide to connect OpenHydra to Slack with Socket Mode.
+If you only need REST/WebSocket app integration (no Slack), use [API and Auth Guide](../api-auth.md).
 
 ## Prerequisites
 

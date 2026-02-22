@@ -58,6 +58,26 @@ uv run openhydra doctor --strict
 uv run openhydra serve
 ```
 
+### Path D: Docker API Service (embed in your product)
+
+Use this when OpenHydra should run as a containerized backend API for your app.
+
+Pre-step: set `OPENHYDRA_WEB_API_KEY` in your shell/secret manager.
+
+```bash
+docker run --rm \
+  -p 7070:7070 \
+  --env OPENHYDRA_WEB_API_KEY \
+  ghcr.io/mercurialsolo/openhydra:latest
+```
+
+Notes:
+
+1. Container starts `openhydra serve` by default.
+2. Default bind is `0.0.0.0:7070`.
+3. Override port with `PORT` or `OPENHYDRA_WEB_PORT`.
+4. Integration examples (REST, WebSocket, auth): [docs/api-auth.md](docs/api-auth.md).
+
 ### Path C: Slack/Email Auto-Response + Browser Research
 
 Use this when you want OpenHydra to ingest inbound Slack/email tasks, do web/browser

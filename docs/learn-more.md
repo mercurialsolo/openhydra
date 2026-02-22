@@ -5,6 +5,8 @@ This document holds deeper topics that are intentionally not expanded in `README
 ## Configuration
 
 Use [SETUP.md](../SETUP.md) for the full configuration reference.
+Use [API and Auth Guide](api-auth.md) when integrating OpenHydra into your own product over
+REST/WebSocket.
 
 Key points:
 
@@ -82,3 +84,25 @@ plugins:
 ```
 
 In managed mode, the plugin starts `openhydra serve`, waits for health readiness, reads the API key, and connects to the event stream.
+
+## API Embedding (REST/WebSocket)
+
+Run OpenHydra as a backend service:
+
+```bash
+openhydra serve --host 0.0.0.0 --port 7070
+```
+
+Or in Docker:
+
+```bash
+# Set OPENHYDRA_WEB_API_KEY in your shell/secret manager first.
+docker run --rm -p 7070:7070 --env OPENHYDRA_WEB_API_KEY ghcr.io/mercurialsolo/openhydra:latest
+```
+
+Auth supports:
+
+1. `X-API-Key` header
+2. Bearer token from `/api/v1/auth/login`
+
+For endpoint examples and auth flows, see [API and Auth Guide](api-auth.md).
