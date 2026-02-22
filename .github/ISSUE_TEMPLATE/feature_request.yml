@@ -6,6 +6,18 @@ body:
     attributes:
       value: |
         Propose a specific improvement with rationale and expected behavior.
+        If your report is a sensitive vulnerability, use private security reporting instead.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and discussions for similar requests.
+          required: true
+        - label: I described the user/developer problem clearly.
+          required: true
+        - label: I did not include secrets, credentials, or private tokens.
+          required: true
   - type: textarea
     id: problem
     attributes:
