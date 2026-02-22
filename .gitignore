@@ -25,6 +25,7 @@ venv/
 # IDE
 .idea/
 .vscode/
+.claude/settings.local.json
 *.swp
 *.swo
 
@@ -34,6 +35,7 @@ Thumbs.db
 
 # Testing
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 .mypy_cache/
