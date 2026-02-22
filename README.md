@@ -9,41 +9,20 @@ Lightweight, local-first multi-agent orchestration. One command, no Docker, no e
 ## Quick Start
 
 ```bash
-# Install from source
-uv pip install -e .
-
-# Install from PyPI (after first release is published)
+# 1) Install
 pip install openhydra
 
-# Recommended: quick onboarding (writes ~/.openhydra/openhydra.yaml with safe defaults)
-uv run openhydra onboard
+# 2) Create a local config with safe defaults
+openhydra onboard
 
-# Validate setup and channel/provider prerequisites
-uv run openhydra doctor
+# 3) Validate your setup
+openhydra doctor
 
-# Optional: strict diagnostics (treat warnings as failures)
-uv run openhydra doctor --strict
-
-# Run a one-off workflow
-uv run openhydra run "Build a Python CLI that converts CSV to JSON"
-
-# Optional: full interactive setup (providers/tools/channels)
-uv run openhydra init
-
-# Optional: install channel/web extras before serving
-uv pip install -e ".[all]"
-
-# Run the server (web API + any enabled channels)
-uv run openhydra serve
-
-# Set up a new role agent in config/agents.yaml
-uv run openhydra agent setup eng.docs --description "Writes implementation docs"
-
-# Interactive setup (prompts for objectives, skills, tools, and context/data)
-uv run openhydra agent setup --interactive
+# 4) Run your first workflow
+openhydra run "Build a Python CLI that converts CSV to JSON"
 ```
 
-Need full setup and configuration details (all settings, env vars, and customization points)?
+Need channel setup, provider configuration, advanced options, or source/developer install?
 See [SETUP.md](SETUP.md).
 
 ## OpenHydra is best for work that needs:
