@@ -38,6 +38,53 @@ This will:
 3. **Gate** — Check quality between steps, ask for human input when needed
 4. **Deliver** — Produce the final artifacts in your project directory
 
+## What Tasks Can OpenHydra Help You Do?
+
+OpenHydra is strongest on tasks that need coordination across multiple steps, roles, and checks.
+You describe the outcome, and it builds the execution plan at submit time.
+
+Examples of plan-heavy tasks:
+
+- **Feature delivery from idea to tested code**
+  - `"Add OAuth login with Google and GitHub, wire session handling, and add tests"`
+- **Complex refactors with safety checks**
+  - `"Migrate this Flask API to FastAPI without breaking existing endpoints"`
+- **Bug investigation + regression prevention**
+  - `"Find and fix the intermittent checkout timeout and add regression coverage"`
+- **Product-to-engineering handoff in one run**
+  - `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
+- **Cross-cutting upgrades**
+  - `"Upgrade to Pydantic v2, fix breaking changes, and verify CLI behavior"`
+
+## Planning On The Fly (No Manual Plan File)
+
+You do not need to write a plan first. Submit the task directly:
+
+```bash
+uv run openhydra run "Migrate this Flask API to FastAPI without breaking existing endpoints" --watch
+```
+
+OpenHydra then:
+
+1. Uses the `planner` role to generate a JSON step graph (`role_id`, `instructions`, `depends_on`)
+2. Persists workflow + steps to SQLite before running (for durability/recovery)
+3. Executes ready steps based on dependencies (independent branches can run concurrently)
+4. Applies role gates (quality/tests/approval) between steps
+5. Reports progress/events and final output
+
+For that FastAPI migration prompt, a typical generated plan could look like:
+
+1. `eng.init`: inventory current Flask routes and migration constraints
+2. `eng.implement`: port app structure and handlers to FastAPI
+3. `test.code`: run/update tests and validate endpoint compatibility
+4. `pm.review`: verify scope completion and release readiness
+
+To inspect the generated plan and step-by-step progress:
+
+```bash
+uv run openhydra status <workflow_id>
+```
+
 ## Contributing
 
 See `CONTRIBUTING.md` for the contributor workflow, checks, and PR requirements.
