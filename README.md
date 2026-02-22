@@ -5,8 +5,11 @@ Lightweight, local-first multi-agent orchestration. One command, no Docker, no e
 ## Quick Start
 
 ```bash
-# Install
+# Install from source
 uv pip install -e .
+
+# Install from PyPI (after first release is published)
+pip install openhydra
 
 # Recommended: quick onboarding (writes ~/.openhydra/openhydra.yaml with safe defaults)
 uv run openhydra onboard
@@ -38,6 +41,18 @@ uv run openhydra agent setup --interactive
 
 Need full setup and configuration details (all settings, env vars, and customization points)?
 See [SETUP.md](SETUP.md).
+
+## Release
+
+PyPI publishing is automated via GitHub Actions (`.github/workflows/publish.yml`):
+
+1. Publish to TestPyPI manually: run `Publish` workflow with input `repository=testpypi`.
+2. Publish to PyPI manually: run `Publish` workflow with input `repository=pypi`.
+3. Publish to PyPI from a tag: push a tag like `v0.1.0` (must match `pyproject.toml` version).
+
+Trusted Publishing must be configured once in both PyPI and TestPyPI for this repository.
+Use owner `mercurialsolo`, repository `openhydra`, workflow `publish.yml`, and environments
+`pypi` / `testpypi`.
 
 ## OpenHydra is best for work that needs:
 

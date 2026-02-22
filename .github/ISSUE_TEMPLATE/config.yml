@@ -1,1 +1,8 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability report (private)
+    url: https://github.com/mercurialsolo/openhydra/security/advisories/new
+    about: Use private reporting for vulnerabilities. Do not open public security issues.
+  - name: Issue submission guidelines
+    url: https://github.com/mercurialsolo/openhydra/blob/main/CONTRIBUTING.md#issue-submission-guidelines
+    about: Review required issue details before filing.

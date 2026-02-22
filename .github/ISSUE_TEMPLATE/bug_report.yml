@@ -6,6 +6,19 @@ body:
     attributes:
       value: |
         Thanks for filing a bug report.
+        Please do not include API keys, tokens, passwords, or credentials in your report.
+        If this is a sensitive security issue, report privately via SECURITY.md.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and discussions for duplicates.
+          required: true
+        - label: I can reproduce this on the latest main branch.
+          required: true
+        - label: I redacted secrets from logs, configs, and screenshots.
+          required: true
   - type: textarea
     id: summary
     attributes:
