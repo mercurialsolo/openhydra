@@ -163,7 +163,7 @@ Notes:
 
 ### 2) `agents`
 
-Controls provider/runtime selection. Role behavior is separate (in `config/roles.yaml`).
+Controls provider/runtime selection. Role behavior is separate (in `config/agents.yaml`).
 
 ```yaml
 agents:
@@ -366,7 +366,7 @@ Files:
 
 Both are loaded and concatenated (global first, local second). This content is injected into role system prompts and can also define schedule/interests for agenda automation.
 
-### 2) Base Role Agents: `config/roles.yaml`
+### 2) Base Role Agents: `config/agents.yaml`
 
 This file defines role-level behavior:
 
@@ -376,7 +376,7 @@ This file defines role-level behavior:
 - budgets
 - gates
 
-Use `openhydra agent scaffold ...` to add custom roles.
+Use `openhydra agent setup ...` to add custom roles.
 
 Default roles include:
 

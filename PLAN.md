@@ -58,7 +58,7 @@ src/
 
     roles/
       __init__.py
-      catalog.py                 # Load and validate roles.yaml
+      catalog.py                 # Load and validate agents.yaml
       executor.py                # RoleExecutor: build prompt, run session
 
     gates/
@@ -73,7 +73,7 @@ src/
       main.py                    # typer CLI app
 
 config/
-  roles.yaml                    # Default role catalog
+  agents.yaml                    # Default role catalog
   schemas/                      # JSON schemas for structured outputs
     prd_output.json
     eng_output.json
@@ -220,7 +220,7 @@ assert result.output  # got a response
 **Goal:** Given a role config + skills + memories, assemble a complete system prompt and run an agent session.
 
 **Build:**
-1. `roles/catalog.py` — Parse `config/roles.yaml`, validate roles
+1. `roles/catalog.py` — Parse `config/agents.yaml`, validate roles
 2. `roles/executor.py` — `RoleExecutor`:
    - Load role config
    - Provision skills (budget-constrained)

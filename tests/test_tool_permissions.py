@@ -32,7 +32,7 @@ def test_role_definition_default_allowed_tools_is_none():
 def test_catalog_absent_allowed_tools_is_none(tmp_path):
     """When allowed_tools key is absent in YAML, it becomes None."""
     yaml_content = "roles:\n  norole:\n    name: No Role\n    description: Test\n"
-    p = tmp_path / "roles.yaml"
+    p = tmp_path / "agents.yaml"
     p.write_text(yaml_content)
 
     catalog = RoleCatalog()
@@ -47,7 +47,7 @@ def test_catalog_empty_allowed_tools_is_empty_list(tmp_path):
         "roles:\n  norole:\n    name: No Role\n"
         "    description: Test\n    allowed_tools: []\n"
     )
-    p = tmp_path / "roles.yaml"
+    p = tmp_path / "agents.yaml"
     p.write_text(yaml_content)
 
     catalog = RoleCatalog()
@@ -62,7 +62,7 @@ def test_catalog_explicit_allowed_tools(tmp_path):
         "roles:\n  norole:\n    name: No Role\n    description: Test\n"
         "    allowed_tools:\n      - Read\n      - Bash\n"
     )
-    p = tmp_path / "roles.yaml"
+    p = tmp_path / "agents.yaml"
     p.write_text(yaml_content)
 
     catalog = RoleCatalog()

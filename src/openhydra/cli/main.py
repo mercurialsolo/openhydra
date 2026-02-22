@@ -1233,14 +1233,15 @@ def auth_revoke(
     _run_cli(_revoke())
 
 
-@agent_app.command(name="scaffold")
-def scaffold_agent(
+@agent_app.command(name="setup")
+def setup_agent(
     role_id: str | None = typer.Argument(None, help="Role ID to create, e.g. eng.docs"),
-    roles_file: Path = typer.Option(
-        Path("config/roles.yaml"),
+    agents_file: Path = typer.Option(
+        Path("config/agents.yaml"),
+        "--agents-file",
         "--roles-file",
         "-f",
-        help="Path to roles.yaml.",
+        help="Path to agents.yaml.",
     ),
     name: str | None = typer.Option(None, "--name", help="Role display name."),
     description: str = typer.Option(
@@ -1321,8 +1322,8 @@ def scaffold_agent(
         help="Prompt for role fields interactively.",
     ),
 ) -> None:
-    """Scaffold a new role agent entry in roles.yaml."""
-    doc, roles = _load_roles_document(roles_file)
+    """Set up a new role agent entry in agents.yaml."""
+    doc, roles = _load_roles_document(agents_file)
 
     if interactive and not role_id:
         role_id = _prompt_text("Role ID (example: eng.docs)", required=True)
@@ -1335,7 +1336,7 @@ def scaffold_agent(
 
     if role_id in roles and not force:
         console.print(
-            f"[bold red]Error:[/bold red] Role '{role_id}' already exists in {roles_file}. "
+            f"[bold red]Error:[/bold red] Role '{role_id}' already exists in {agents_file}. "
             "Use --force to overwrite."
         )
         raise typer.Exit(code=1)
@@ -1419,10 +1420,10 @@ def scaffold_agent(
 
     roles[role_id] = role_payload
     doc["roles"] = roles
-    roles_file.parent.mkdir(parents=True, exist_ok=True)
-    roles_file.write_text(yaml.safe_dump(doc, sort_keys=False))
-    console.print(f"[bold green]Scaffolded role:[/bold green] {role_id}")
-    console.print(f"[dim]Updated {roles_file}[/dim]")
+    agents_file.parent.mkdir(parents=True, exist_ok=True)
+    agents_file.write_text(yaml.safe_dump(doc, sort_keys=False))
+    console.print(f"[bold green]Set up role:[/bold green] {role_id}")
+    console.print(f"[dim]Updated {agents_file}[/dim]")
 
 
 @app.command()

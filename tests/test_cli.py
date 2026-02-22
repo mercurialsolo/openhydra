@@ -236,17 +236,17 @@ def test_doctor_command_strict_fails_on_warnings() -> None:
     assert "warn=1" in result.output
 
 
-def test_agent_scaffold_command_help() -> None:
-    result = runner.invoke(app, ["agent", "scaffold", "--help"])
+def test_agent_setup_command_help() -> None:
+    result = runner.invoke(app, ["agent", "setup", "--help"])
     assert result.exit_code == 0
-    assert "roles.yaml" in result.output
+    assert "agents.yaml" in result.output
 
 
-def test_agent_scaffold_requires_role_id_when_not_interactive(tmp_path) -> None:
-    roles_file = tmp_path / "roles.yaml"
+def test_agent_setup_requires_role_id_when_not_interactive(tmp_path) -> None:
+    roles_file = tmp_path / "agents.yaml"
     result = runner.invoke(
         app,
-        ["agent", "scaffold", "--roles-file", str(roles_file)],
+        ["agent", "setup", "--agents-file", str(roles_file)],
     )
     assert result.exit_code == 1
     assert "Role ID is required" in result.output
@@ -266,17 +266,17 @@ def test_configure_serve_for_web_clients_forces_web_enabled() -> None:
     assert cfg.web.port == 9090
 
 
-def test_agent_scaffold_creates_role_entry(tmp_path) -> None:
-    roles_file = tmp_path / "roles.yaml"
+def test_agent_setup_creates_role_entry(tmp_path) -> None:
+    roles_file = tmp_path / "agents.yaml"
     roles_file.write_text("roles:\n  existing:\n    name: Existing\n")
 
     result = runner.invoke(
         app,
         [
             "agent",
-            "scaffold",
+            "setup",
             "eng.docs",
-            "--roles-file",
+            "--agents-file",
             str(roles_file),
             "--tool",
             "Read",
@@ -306,15 +306,15 @@ def test_agent_scaffold_creates_role_entry(tmp_path) -> None:
     assert role["gates"] == [{"type": "quality", "threshold": 24}, {"type": "tests_pass"}]
 
 
-def test_agent_scaffold_interactive_collects_objectives_and_context(tmp_path) -> None:
-    roles_file = tmp_path / "roles.yaml"
+def test_agent_setup_interactive_collects_objectives_and_context(tmp_path) -> None:
+    roles_file = tmp_path / "agents.yaml"
 
     result = runner.invoke(
         app,
         [
             "agent",
-            "scaffold",
-            "--roles-file",
+            "setup",
+            "--agents-file",
             str(roles_file),
             "--interactive",
         ],
@@ -340,21 +340,21 @@ def test_agent_scaffold_interactive_collects_objectives_and_context(tmp_path) ->
     assert role["context_reads"] == ["design docs", "/docs/adr"]
 
 
-def test_agent_scaffold_duplicate_without_force_fails(tmp_path) -> None:
-    roles_file = tmp_path / "roles.yaml"
+def test_agent_setup_duplicate_without_force_fails(tmp_path) -> None:
+    roles_file = tmp_path / "agents.yaml"
     roles_file.write_text("roles:\n  eng.docs:\n    name: Existing\n")
 
     result = runner.invoke(
         app,
-        ["agent", "scaffold", "eng.docs", "--roles-file", str(roles_file)],
+        ["agent", "setup", "eng.docs", "--agents-file", str(roles_file)],
     )
 
     assert result.exit_code == 1
     assert "already exists" in result.output
 
 
-def test_agent_scaffold_force_overwrites_existing_role(tmp_path) -> None:
-    roles_file = tmp_path / "roles.yaml"
+def test_agent_setup_force_overwrites_existing_role(tmp_path) -> None:
+    roles_file = tmp_path / "agents.yaml"
     roles_file.write_text(
         "roles:\n"
         "  eng.docs:\n"
@@ -369,9 +369,9 @@ def test_agent_scaffold_force_overwrites_existing_role(tmp_path) -> None:
         app,
         [
             "agent",
-            "scaffold",
+            "setup",
             "eng.docs",
-            "--roles-file",
+            "--agents-file",
             str(roles_file),
             "--force",
             "--description",
@@ -387,13 +387,13 @@ def test_agent_scaffold_force_overwrites_existing_role(tmp_path) -> None:
     assert role["model"] == "claude-sonnet-4-5-20250929"
 
 
-def test_agent_scaffold_dry_run_does_not_write_file(tmp_path) -> None:
-    roles_file = tmp_path / "roles.yaml"
+def test_agent_setup_dry_run_does_not_write_file(tmp_path) -> None:
+    roles_file = tmp_path / "agents.yaml"
     assert not roles_file.exists()
 
     result = runner.invoke(
         app,
-        ["agent", "scaffold", "qa.reviewer", "--roles-file", str(roles_file), "--dry-run"],
+        ["agent", "setup", "qa.reviewer", "--agents-file", str(roles_file), "--dry-run"],
     )
 
     assert result.exit_code == 0
