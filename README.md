@@ -132,7 +132,7 @@ How to talk to agents:
 - **WhatsApp**: send a normal message as the task text; control commands like `approve`, `reject <reason>`, `pause`, `resume`, `cancel` are supported. On first setup, `openhydra serve` prints the pairing QR in terminal.
 - **Discord**: run `/hydra` with `action=run` and your task as `argument`
 
-## Planning On The Fly (No Manual Plan File)
+## Planning on the fly 
 
 You do not need to write a plan first. Submit the outcome directly:
 
