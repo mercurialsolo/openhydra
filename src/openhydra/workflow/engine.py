@@ -626,7 +626,9 @@ class WorkflowEngine:
         await self._db.conn.commit()
 
         # Best-effort: include session metadata if present (for channel routing).
-        wf_cfg = self._workflow_configs.get(workflow_id) or await self._load_workflow_config(workflow_id)
+        wf_cfg = self._workflow_configs.get(workflow_id) or await self._load_workflow_config(
+            workflow_id,
+        )
         ctx: dict[str, Any] = {}
         if wf_cfg:
             for k in ("session_key", "channel", "user_id", "user_name"):

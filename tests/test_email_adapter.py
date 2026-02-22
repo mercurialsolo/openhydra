@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from openhydra.channels.context import ChannelContext
 from openhydra.channels.email import create_channel
 from openhydra.channels.email.adapter import _TOKEN_EXPIRY_BUFFER, EmailChannel
-from openhydra.channels.context import ChannelContext
 from openhydra.config import EmailConfig
 from openhydra.events import EventBus
 
