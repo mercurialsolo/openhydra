@@ -119,7 +119,12 @@ class SlackHandlers:
         channel = event.get("channel", "")
         thread_ts = event.get("ts", "")
 
-        workflow_id = await self._engine.submit(text)
+        workflow_id = await self._engine.submit(
+            text,
+            session_key=f"slack:{user_id}",
+            channel="slack",
+            user_id=user_id,
+        )
 
         # Store in session if available, else fallback to in-memory
         if self._sessions:

@@ -80,7 +80,7 @@ class RestrictedEngine:
             )
         return self._engine.db
 
-    async def submit(self, task: str) -> str:
+    async def submit(self, task: str, **kwargs: Any) -> str:
         if not self._permissions.can_submit:
             logger.warning(
                 "Channel '%s' denied submit permission", self._channel_name
@@ -89,7 +89,7 @@ class RestrictedEngine:
                 f"Channel '{self._channel_name}' does not have submit permission"
             )
         self._check_rate_limit()
-        result = await self._engine.submit(task)
+        result = await self._engine.submit(task, **kwargs)
         self._submit_times.append(time.monotonic())
         return result
 

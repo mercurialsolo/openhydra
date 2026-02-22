@@ -103,7 +103,12 @@ async def test_handle_run_command(engine):
     await h._handle_command(interaction, "run", "build a thing")
 
     interaction.response.defer.assert_called_once()
-    engine.submit.assert_called_once_with("build a thing")
+    engine.submit.assert_called_once_with(
+        "build a thing",
+        session_key="discord:12345",
+        channel="discord",
+        user_id="12345",
+    )
     interaction.followup.send.assert_called_once()
 
 

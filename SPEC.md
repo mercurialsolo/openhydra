@@ -9,7 +9,7 @@ OpenHydra is a lightweight, local-first multi-agent orchestration system. It run
 
 ## 1. Design Principles
 
-1. **Single process, single command.** `openhydra start` launches everything. No Temporal server, no Qdrant container, no Docker.
+1. **Single process, single command.** `openhydra serve` launches the engine + enabled channels. No Temporal server, no Qdrant container, no Docker.
 2. **Pluggable everything.** Memory backends, agent providers, skill sources — all behind adapter interfaces. Swap SQLite for Qdrant, local Claude for remote API, filesystem skills for a registry server.
 3. **Interface-agnostic core.** The workflow engine, agent executor, and memory system know nothing about CLI, TUI, or web. Interfaces are separate packages that consume the core via events and APIs.
 4. **Portable state.** All state lives in `~/.openhydra/` (or project-local `.openhydra/`). One directory, copyable, version-controllable.
@@ -467,10 +467,14 @@ class Event:
 | `workflow.completed` | All steps done |
 | `workflow.failed` | Unrecoverable error |
 | `workflow.waiting` | Waiting for human input |
+| `workflow.paused` | Workflow paused |
+| `workflow.resumed` | Workflow resumed |
+| `workflow.cancelled` | Workflow cancelled |
 | `step.started` | Agent session begins |
-| `step.progress` | Token count / tool call update |
+| `step.progress` | Progress update |
 | `step.completed` | Step finished successfully |
 | `step.failed` | Step failed (may retry) |
+| `step.timeout` | Step timed out |
 | `approval.requested` | Human approval needed |
 | `approval.resolved` | Human responded |
 | `memory.stored` | New memory entry created |
@@ -487,8 +491,11 @@ Interfaces are separate packages. They import the core engine and subscribe to i
 Minimal command-line interface using `typer` or `click`.
 
 ```bash
-# Start everything (engine + optional web server)
-openhydra start
+# Interactive setup (writes ~/.openhydra/openhydra.yaml)
+openhydra init
+
+# Serve engine + enabled channels (web, Slack, Discord, WhatsApp, email)
+openhydra serve
 
 # Submit a task
 openhydra run "Build a REST API for user management"
@@ -503,19 +510,19 @@ openhydra list
 # Respond to approval
 openhydra approve <approval-id>
 openhydra reject <approval-id> --reason "..."
-openhydra respond <approval-id> --input "..."
 
-# Memory
-openhydra memory search "authentication patterns"
-openhydra memory store "Always use bcrypt for passwords"
+# Workflow lifecycle
+openhydra pause <workflow-id>
+openhydra resume <workflow-id> [--watch]
+openhydra cancel <workflow-id>
 
-# Skills
-openhydra skills list
-openhydra skills add <path-or-url>
+# Skills + config
+openhydra skills
+openhydra config
 
-# Config
-openhydra config show
-openhydra config set default_provider anthropic-api
+# Channel auth allowlist (optional)
+openhydra auth add slack:<U123...> --name "Alice"
+openhydra auth revoke slack:<U123...>
 ```
 
 ### 4.2 TUI (`openhydra-tui`)

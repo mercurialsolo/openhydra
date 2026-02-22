@@ -93,6 +93,22 @@ def _run_async(coro):
     return asyncio.run(coro)
 
 
+def _run_cli(coro) -> None:
+    """Run a CLI coroutine and print user-friendly errors."""
+    try:
+        _run_async(coro)
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        from openhydra.hydra_compat import HydraCompatError
+
+        if isinstance(exc, HydraCompatError):
+            console.print(f"[bold red]Error ({exc.status_code}):[/bold red] {exc.detail}")
+        else:
+            console.print(f"[bold red]Error:[/bold red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+
 async def _create_engine():
     """Create and start an Engine instance."""
     from openhydra.engine import Engine
@@ -161,7 +177,7 @@ def run(
         finally:
             await engine.stop()
 
-    _run_async(_run())
+    _run_cli(_run())
 
 
 @app.command()
@@ -265,7 +281,7 @@ def status(
         finally:
             await engine.stop()
 
-    _run_async(_status())
+    _run_cli(_status())
 
 
 @app.command(name="list")
@@ -292,7 +308,7 @@ def approve(
         finally:
             await engine.stop()
 
-    _run_async(_approve())
+    _run_cli(_approve())
 
 
 @app.command()
@@ -313,7 +329,7 @@ def reject(
         finally:
             await engine.stop()
 
-    _run_async(_reject())
+    _run_cli(_reject())
 
 
 @app.command(name="pause")
@@ -336,7 +352,7 @@ def pause_workflow(
         finally:
             await engine.stop()
 
-    _run_async(_pause())
+    _run_cli(_pause())
 
 
 @app.command(name="resume")
@@ -380,7 +396,7 @@ def resume_workflow(
         finally:
             await engine.stop()
 
-    _run_async(_resume())
+    _run_cli(_resume())
 
 
 @app.command(name="cancel")
@@ -402,7 +418,7 @@ def cancel_workflow(
         finally:
             await engine.stop()
 
-    _run_async(_cancel())
+    _run_cli(_cancel())
 
 
 @app.command()
@@ -436,7 +452,7 @@ def skills() -> None:
         finally:
             await engine.stop()
 
-    _run_async(_skills())
+    _run_cli(_skills())
 
 
 @app.command()
@@ -537,9 +553,9 @@ def serve(
             console.print(f"[bold red]Max restarts ({max_restarts}) reached, exiting[/bold red]")
 
     if daemon:
-        _run_async(_serve_daemon())
+        _run_cli(_serve_daemon())
     else:
-        _run_async(_serve())
+        _run_cli(_serve())
 
 
 # --- Skill review commands ---
@@ -574,7 +590,7 @@ def skill_review() -> None:
         finally:
             await engine.stop()
 
-    _run_async(_review())
+    _run_cli(_review())
 
 
 @app.command(name="skill-approve")
@@ -596,7 +612,7 @@ def skill_approve(
         finally:
             await engine.stop()
 
-    _run_async(_approve())
+    _run_cli(_approve())
 
 
 @app.command(name="skill-reject")
@@ -618,7 +634,7 @@ def skill_reject(
         finally:
             await engine.stop()
 
-    _run_async(_reject())
+    _run_cli(_reject())
 
 
 # --- Auth commands ---
@@ -652,7 +668,7 @@ def auth_confirm(
         finally:
             await engine.stop()
 
-    _run_async(_confirm())
+    _run_cli(_confirm())
 
 
 @auth_app.command(name="list")
@@ -689,7 +705,7 @@ def auth_list() -> None:
         finally:
             await engine.stop()
 
-    _run_async(_list())
+    _run_cli(_list())
 
 
 @auth_app.command(name="add")
@@ -715,7 +731,7 @@ def auth_add(
         finally:
             await engine.stop()
 
-    _run_async(_add())
+    _run_cli(_add())
 
 
 @auth_app.command(name="revoke")
@@ -743,7 +759,7 @@ def auth_revoke(
         finally:
             await engine.stop()
 
-    _run_async(_revoke())
+    _run_cli(_revoke())
 
 
 @agent_app.command(name="scaffold")

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
+import typer
 import yaml
 from typer.testing import CliRunner
 
-from openhydra.cli.main import _configure_serve_for_web_clients, app
+from openhydra.cli.main import _configure_serve_for_web_clients, _run_cli, app
 
 runner = CliRunner()
 
@@ -16,6 +18,32 @@ def test_help() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "openhydra" in result.output.lower() or "multi-agent" in result.output.lower()
+
+
+def test_run_cli_formats_hydra_errors(capsys) -> None:
+    from openhydra.hydra_compat import HydraCompatError
+
+    async def _boom():
+        raise HydraCompatError(409, "Conflict")
+
+    with pytest.raises(typer.Exit) as exc:
+        _run_cli(_boom())
+
+    assert exc.value.exit_code == 1
+    assert "Error (409)" in capsys.readouterr().out
+
+
+def test_run_cli_formats_generic_errors(capsys) -> None:
+    async def _boom():
+        raise RuntimeError("boom")
+
+    with pytest.raises(typer.Exit) as exc:
+        _run_cli(_boom())
+
+    assert exc.value.exit_code == 1
+    out = capsys.readouterr().out
+    assert "Error:" in out
+    assert "boom" in out
 
 
 def test_config_command() -> None:

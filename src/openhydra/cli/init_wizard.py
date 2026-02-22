@@ -13,6 +13,20 @@ from rich.console import Console
 console = Console()
 
 
+def _yes_no(prompt_text: str, *, default: bool = False) -> bool:
+    """Prompt for a yes/no answer."""
+    suffix = "Y/n" if default else "y/N"
+    while True:
+        raw = console.input(f"{prompt_text} [{suffix}]: ").strip().lower()
+        if not raw:
+            return default
+        if raw in {"y", "yes"}:
+            return True
+        if raw in {"n", "no"}:
+            return False
+        console.print("[red]Please answer y or n.[/red]")
+
+
 def _detect_providers() -> dict[str, bool]:
     """Detect which agent providers are available."""
     providers: dict[str, bool] = {}
@@ -53,6 +67,16 @@ def _pick_option(
                 if raw.lower() == value.lower():
                     return value
         console.print("[red]Invalid choice, try again.[/red]")
+
+
+def _deep_merge(dst: dict, src: dict) -> dict:
+    """Recursively merge *src* into *dst* (src wins)."""
+    for key, val in src.items():
+        if isinstance(val, dict) and isinstance(dst.get(key), dict):
+            _deep_merge(dst[key], val)
+        else:
+            dst[key] = val
+    return dst
 
 
 def run_init_wizard() -> None:
@@ -147,10 +171,70 @@ def run_init_wizard() -> None:
         )
         env_hints.append("export PERPLEXITY_API_KEY=<your-key>")
 
-    # 6. Generate API key
+    # 6. Optional channel setup (Slack/Discord/WhatsApp/Email/etc.)
+    console.print("\n[bold]Messaging channels (optional):[/bold]")
+    console.print("  Enable channels now, or edit ~/.openhydra/openhydra.yaml later.\n")
+
+    channels_cfg: dict[str, dict] = {}
+    setup_hints: list[str] = []
+
+    if _yes_no("Enable Slack (Socket Mode)?", default=False):
+        channels_cfg["slack"] = {"enabled": True}
+        if not os.environ.get("OPENHYDRA_SLACK_BOT_TOKEN"):
+            env_hints.append("export OPENHYDRA_SLACK_BOT_TOKEN=<xoxb-...>")
+        if not os.environ.get("OPENHYDRA_SLACK_APP_TOKEN"):
+            env_hints.append("export OPENHYDRA_SLACK_APP_TOKEN=<xapp-...>")
+
+    if _yes_no("Enable Discord?", default=False):
+        channels_cfg["discord"] = {"enabled": True}
+        if not os.environ.get("OPENHYDRA_DISCORD_BOT_TOKEN"):
+            env_hints.append("export OPENHYDRA_DISCORD_BOT_TOKEN=<your-token>")
+
+    if _yes_no("Enable WhatsApp?", default=False):
+        backend = _pick_option(
+            "WhatsApp backend",
+            [
+                ("baileys", "Baileys (QR login, WhatsApp Web)"),
+                ("cloud-api", "Cloud API (webhook, Meta business account)"),
+            ],
+            default="baileys",
+        )
+        wa_cfg: dict[str, object] = {"enabled": True, "backend": backend}
+        if backend == "cloud-api":
+            phone_number_id = console.input("Meta phone_number_id: ").strip()
+            verify_token = console.input("Webhook verify token: ").strip()
+            if phone_number_id:
+                wa_cfg["phone_number_id"] = phone_number_id
+            if verify_token:
+                wa_cfg["verify_token"] = verify_token
+            if not os.environ.get("OPENHYDRA_WHATSAPP_ACCESS_TOKEN"):
+                env_hints.append("export OPENHYDRA_WHATSAPP_ACCESS_TOKEN=<your-token>")
+            setup_hints.append(
+                "Expose the web server publicly and register webhook: "
+                "https://<public-host>/webhooks/whatsapp"
+            )
+        else:
+            # Baileys requires a Node dependency for the bridge.
+            setup_hints.append("npm install @whiskeysockets/baileys")
+
+        channels_cfg["whatsapp"] = wa_cfg  # type: ignore[assignment]
+
+    if _yes_no("Enable Email (IMAP + SMTP)?", default=False):
+        channels_cfg["email"] = {"enabled": True}
+        setup_hints.append('uv pip install -e ".[email]"')
+        if not os.environ.get("OPENHYDRA_EMAIL_IMAP_HOST"):
+            env_hints.append("export OPENHYDRA_EMAIL_IMAP_HOST=<imap-host>")
+        if not os.environ.get("OPENHYDRA_EMAIL_SMTP_HOST"):
+            env_hints.append("export OPENHYDRA_EMAIL_SMTP_HOST=<smtp-host>")
+        if not os.environ.get("OPENHYDRA_EMAIL_USERNAME"):
+            env_hints.append("export OPENHYDRA_EMAIL_USERNAME=<user@example.com>")
+        if not os.environ.get("OPENHYDRA_EMAIL_PASSWORD"):
+            env_hints.append("export OPENHYDRA_EMAIL_PASSWORD=<password-or-app-password>")
+
+    # 7. Generate API key
     api_key = secrets.token_hex(16)
 
-    # 7. Build config
+    # 8. Build config
     config_data: dict = {
         "agents": {"default_provider": provider},
         "web": {"api_key": api_key},
@@ -161,6 +245,8 @@ def run_init_wizard() -> None:
             },
         },
     }
+    if channels_cfg:
+        config_data["channels"] = channels_cfg
 
     # Write config
     config_dir = Path.home() / ".openhydra"
@@ -174,11 +260,7 @@ def run_init_wizard() -> None:
             existing = yaml.safe_load(f) or {}
 
     # Deep merge (config_data wins)
-    for key, value in config_data.items():
-        if isinstance(value, dict) and isinstance(existing.get(key), dict):
-            existing[key].update(value)
-        else:
-            existing[key] = value
+    _deep_merge(existing, config_data)
 
     with open(config_path, "w") as f:
         yaml.safe_dump(existing, f, default_flow_style=False)
@@ -197,10 +279,17 @@ def run_init_wizard() -> None:
     console.print(f"  Browser:  {' → '.join(browser)}")
     console.print(f"  Search:   {search}")
     console.print(f"  API key:  {api_key}")
+    if channels_cfg:
+        console.print(f"  Channels: {', '.join(sorted(channels_cfg.keys()))}")
 
     if env_hints:
         console.print("\n[bold]Set these environment variables:[/bold]")
         for hint in env_hints:
+            console.print(f"  {hint}")
+
+    if setup_hints:
+        console.print("\n[bold]Additional setup:[/bold]")
+        for hint in setup_hints:
             console.print(f"  {hint}")
 
     console.print(

@@ -7,6 +7,7 @@ import email
 import email.utils
 import logging
 import time
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import TYPE_CHECKING
 
@@ -30,6 +31,7 @@ except ImportError:
 if TYPE_CHECKING:
     from openhydra.channels.context import ChannelContext
     from openhydra.config import EmailConfig
+    from openhydra.events import Event
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +50,19 @@ class EmailChannel:
         self._engine = ctx.engine
         self._config = config
         self._ctx = ctx
+        self._sessions = getattr(ctx, "sessions", None)
         self._task: asyncio.Task | None = None
         # Track message IDs for threading replies
         self._thread_map: dict[str, str] = {}  # workflow_id -> message_id
         # OAuth2 token cache
         self._access_token: str = ""
         self._token_expires_at: float = 0.0
+
+        # Subscribe to engine events so we can deliver terminal replies back to email.
+        try:
+            self._engine.events.on_all(self.on_engine_event)
+        except Exception:
+            pass
 
     @property
     def name(self) -> str:
@@ -213,6 +222,7 @@ class EmailChannel:
         sender = msg.get("From", "")
         subject = msg.get("Subject", "")
         message_id = msg.get("Message-ID", "")
+        references = msg.get("References", "") or ""
 
         # Extract body
         body = ""
@@ -252,15 +262,101 @@ class EmailChannel:
         )
 
         try:
-            workflow_id = await self._engine.submit(task_text)
+            name, addr = email.utils.parseaddr(sender)
+            identity = addr or sender
+            workflow_id = await self._engine.submit(
+                task_text,
+                session_key=f"email:{identity}",
+                channel="email",
+                user_id=identity,
+                user_name=name,
+            )
             if message_id:
                 self._thread_map[workflow_id] = message_id
+            if self._sessions:
+                try:
+                    from openhydra.channels.session import ChannelSession
+
+                    session = ChannelSession(
+                        session_key=f"email:{identity}",
+                        active_workflow_id=workflow_id,
+                        last_channel="email",
+                        last_message_at=datetime.now(timezone.utc),
+                        metadata={
+                            "email": identity,
+                            "subject": subject,
+                            "message_id": message_id,
+                            "references": references,
+                        },
+                    )
+                    await self._sessions.upsert(session)
+                except Exception:
+                    pass
             logger.info(
                 "Email from %s submitted as workflow %s",
                 sender, workflow_id[:8],
             )
         except Exception:
             logger.exception("Failed to submit email from %s", sender)
+
+    async def on_engine_event(self, event: Event) -> None:
+        """Deliver terminal workflow events back to the originating email address."""
+        if event.type not in ("workflow.completed", "workflow.failed", "workflow.cancelled"):
+            return
+
+        wf_id = event.data.get("workflow_id", "")
+        if not wf_id:
+            return
+
+        # Prefer workflow config fields (emitted by WorkflowEngine); fallback to session store.
+        channel = str(event.data.get("channel") or "")
+        to_addr = str(event.data.get("user_id") or "")
+        if channel != "email" or not to_addr:
+            if not self._sessions:
+                return
+            try:
+                session = await self._sessions.find_by_workflow(wf_id)
+            except Exception:
+                session = None
+            if not session or session.last_channel != "email":
+                return
+            parts = session.session_key.split(":", 1)
+            to_addr = parts[1] if len(parts) > 1 else session.session_key
+
+        body = self._event_to_email_text(event)
+        await self.send_message(to_addr, body)
+
+        # Clear session mapping for this workflow (mirrors Slack/WhatsApp cleanup).
+        if self._sessions:
+            try:
+                await self._sessions.clear_workflow(wf_id)
+            except Exception:
+                pass
+
+    @staticmethod
+    def _event_to_email_text(event: Event) -> str:
+        wf_id = str(event.data.get("workflow_id") or "")[:8]
+
+        if event.type == "workflow.completed":
+            header = f"Workflow {wf_id} completed."
+        elif event.type == "workflow.failed":
+            header = f"Workflow {wf_id} failed."
+        else:
+            header = f"Workflow {wf_id} cancelled."
+
+        parts = [header]
+
+        if output := event.data.get("output"):
+            parts.append("\nOutput:\n" + str(output))
+        if error := event.data.get("error"):
+            parts.append("\nError:\n" + str(error))
+        if (cost := event.data.get("cost_usd")) is not None:
+            try:
+                parts.append(f"\nCost: ${float(cost):.4f}")
+            except Exception:
+                parts.append(f"\nCost: {cost}")
+
+        return "\n".join(parts).strip()
 
     async def _send_email(
         self,

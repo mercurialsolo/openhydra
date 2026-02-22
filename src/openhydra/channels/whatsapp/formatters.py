@@ -66,7 +66,8 @@ def _event_details(event: Event) -> str:
         parts.append(f"Task: {task}")
 
     if output := event.data.get("output"):
-        truncated = output[:300] + "..." if len(output) > 300 else output
+        limit = 1200 if event.type in ("workflow.completed", "workflow.failed") else 300
+        truncated = output[:limit] + "..." if len(output) > limit else output
         parts.append(f"Output:\n{truncated}")
 
     if error := event.data.get("error"):
