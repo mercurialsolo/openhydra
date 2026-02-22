@@ -79,9 +79,13 @@ def _deep_merge(dst: dict, src: dict) -> dict:
     return dst
 
 
-def run_init_wizard() -> None:
-    """Run the interactive init wizard."""
-    console.print("\n[bold]OpenHydra Setup Wizard[/bold]\n")
+def run_init_wizard(*, quick: bool = False) -> None:
+    """Run the setup wizard.
+
+    quick=True keeps setup minimal and skips advanced prompts.
+    """
+    mode_label = "Quick Setup" if quick else "Setup"
+    console.print(f"\n[bold]OpenHydra {mode_label} Wizard[/bold]\n")
 
     # 1. Detect providers
     providers = _detect_providers()
@@ -103,133 +107,141 @@ def run_init_wizard() -> None:
             ("anthropic-api", "anthropic-api (no API key)"),
         ]
 
-    # 2. Pick default provider
-    default_provider = next(
-        (n for n, a in providers.items() if a), "claude-sdk"
-    )
-    provider = _pick_option(
-        "Default provider",
-        available_providers,
-        default=default_provider,
-    )
-
-    # 3. Pick primary browser tool (fallbacks auto-added)
-    console.print("\n[bold]Browser automation (fallback chain):[/bold]")
-    console.print("  Primary choice runs first; others are tried if it fails to connect.\n")
-    primary_browser = _pick_option(
-        "Primary browser",
-        [
-            ("claude-in-chrome", "Claude in Chrome (requires extension)"),
-            ("playwright", "Playwright (headless, auto-installs)"),
-            ("puppeteer", "Puppeteer (headless Chrome via npx)"),
-            ("browserbase", "Browserbase (cloud, requires API key)"),
-        ],
-        default="claude-in-chrome",
-    )
-
-    # Build ordered fallback list: primary first, then other local options
-    _all_browsers = ["claude-in-chrome", "playwright", "puppeteer", "browserbase"]
-    browser: list[str] = [primary_browser]
-    for b in _all_browsers:
-        if b != primary_browser and b != "browserbase":
-            browser.append(b)
-
-    # 4. Pick search tool
-    console.print("\n[bold]Web search:[/bold]")
-    search = _pick_option(
-        "Search tool",
-        [
-            ("tavily", "Tavily (requires TAVILY_API_KEY)"),
-            ("duckduckgo", "DuckDuckGo (free, no API key)"),
-            ("perplexity", "Perplexity (requires PERPLEXITY_API_KEY)"),
-            ("none", "None"),
-        ],
-        default="tavily",
-    )
-
-    # 5. Prompt for missing API keys
+    # 2. Pick provider and setup defaults
+    default_provider = next((n for n, a in providers.items() if a), "claude-sdk")
     env_hints: list[str] = []
-    if "browserbase" in browser:
-        if not os.environ.get("BROWSERBASE_API_KEY"):
-            console.print(
-                "\n[yellow]Browserbase requires BROWSERBASE_API_KEY.[/yellow] "
-                "Get one at https://browserbase.com"
-            )
-            env_hints.append("export BROWSERBASE_API_KEY=<your-key>")
-        if not os.environ.get("BROWSERBASE_PROJECT_ID"):
-            env_hints.append("export BROWSERBASE_PROJECT_ID=<your-project-id>")
-    if search == "tavily" and not os.environ.get("TAVILY_API_KEY"):
-        console.print(
-            "\n[yellow]Tavily requires TAVILY_API_KEY.[/yellow] "
-            "Get one at https://tavily.com"
-        )
-        env_hints.append("export TAVILY_API_KEY=<your-key>")
-    if search == "perplexity" and not os.environ.get("PERPLEXITY_API_KEY"):
-        console.print(
-            "\n[yellow]Perplexity requires PERPLEXITY_API_KEY.[/yellow] "
-            "Get one at https://perplexity.ai"
-        )
-        env_hints.append("export PERPLEXITY_API_KEY=<your-key>")
-
-    # 6. Optional channel setup (Slack/Discord/WhatsApp/Email/etc.)
-    console.print("\n[bold]Messaging channels (optional):[/bold]")
-    console.print("  Enable channels now, or edit ~/.openhydra/openhydra.yaml later.\n")
-
-    channels_cfg: dict[str, dict] = {}
     setup_hints: list[str] = []
+    channels_cfg: dict[str, dict] = {}
 
-    if _yes_no("Enable Slack (Socket Mode)?", default=False):
-        channels_cfg["slack"] = {"enabled": True}
-        if not os.environ.get("OPENHYDRA_SLACK_BOT_TOKEN"):
-            env_hints.append("export OPENHYDRA_SLACK_BOT_TOKEN=<xoxb-...>")
-        if not os.environ.get("OPENHYDRA_SLACK_APP_TOKEN"):
-            env_hints.append("export OPENHYDRA_SLACK_APP_TOKEN=<xapp-...>")
-
-    if _yes_no("Enable Discord?", default=False):
-        channels_cfg["discord"] = {"enabled": True}
-        if not os.environ.get("OPENHYDRA_DISCORD_BOT_TOKEN"):
-            env_hints.append("export OPENHYDRA_DISCORD_BOT_TOKEN=<your-token>")
-
-    if _yes_no("Enable WhatsApp?", default=False):
-        backend = _pick_option(
-            "WhatsApp backend",
-            [
-                ("baileys", "Baileys (QR login, WhatsApp Web)"),
-                ("cloud-api", "Cloud API (webhook, Meta business account)"),
-            ],
-            default="baileys",
+    if quick:
+        provider = default_provider
+        browser = ["claude-in-chrome", "playwright", "puppeteer"]
+        search = "duckduckgo"
+        console.print(
+            "[dim]Quick mode:[/dim] using detected defaults "
+            f"(provider={provider}, search={search}, channels=none)."
         )
-        wa_cfg: dict[str, object] = {"enabled": True, "backend": backend}
-        if backend == "cloud-api":
-            phone_number_id = console.input("Meta phone_number_id: ").strip()
-            verify_token = console.input("Webhook verify token: ").strip()
-            if phone_number_id:
-                wa_cfg["phone_number_id"] = phone_number_id
-            if verify_token:
-                wa_cfg["verify_token"] = verify_token
-            if not os.environ.get("OPENHYDRA_WHATSAPP_ACCESS_TOKEN"):
-                env_hints.append("export OPENHYDRA_WHATSAPP_ACCESS_TOKEN=<your-token>")
-            setup_hints.append(
-                "Expose the web server publicly and register webhook: "
-                "https://<public-host>/webhooks/whatsapp"
+    else:
+        provider = _pick_option(
+            "Default provider",
+            available_providers,
+            default=default_provider,
+        )
+
+        # 3. Pick primary browser tool (fallbacks auto-added)
+        console.print("\n[bold]Browser automation (fallback chain):[/bold]")
+        console.print("  Primary choice runs first; others are tried if it fails to connect.\n")
+        primary_browser = _pick_option(
+            "Primary browser",
+            [
+                ("claude-in-chrome", "Claude in Chrome (requires extension)"),
+                ("playwright", "Playwright (headless, auto-installs)"),
+                ("puppeteer", "Puppeteer (headless Chrome via npx)"),
+                ("browserbase", "Browserbase (cloud, requires API key)"),
+            ],
+            default="claude-in-chrome",
+        )
+
+        # Build ordered fallback list: primary first, then other local options
+        _all_browsers = ["claude-in-chrome", "playwright", "puppeteer", "browserbase"]
+        browser = [primary_browser]
+        for b in _all_browsers:
+            if b != primary_browser and b != "browserbase":
+                browser.append(b)
+
+        # 4. Pick search tool
+        console.print("\n[bold]Web search:[/bold]")
+        search = _pick_option(
+            "Search tool",
+            [
+                ("tavily", "Tavily (requires TAVILY_API_KEY)"),
+                ("duckduckgo", "DuckDuckGo (free, no API key)"),
+                ("perplexity", "Perplexity (requires PERPLEXITY_API_KEY)"),
+                ("none", "None"),
+            ],
+            default="duckduckgo",
+        )
+
+        # 5. Prompt for missing API keys
+        if "browserbase" in browser:
+            if not os.environ.get("BROWSERBASE_API_KEY"):
+                console.print(
+                    "\n[yellow]Browserbase requires BROWSERBASE_API_KEY.[/yellow] "
+                    "Get one at https://browserbase.com"
+                )
+                env_hints.append("export BROWSERBASE_API_KEY=<your-key>")
+            if not os.environ.get("BROWSERBASE_PROJECT_ID"):
+                env_hints.append("export BROWSERBASE_PROJECT_ID=<your-project-id>")
+        if search == "tavily" and not os.environ.get("TAVILY_API_KEY"):
+            console.print(
+                "\n[yellow]Tavily requires TAVILY_API_KEY.[/yellow] "
+                "Get one at https://tavily.com"
             )
-        else:
-            # Baileys requires a Node dependency for the bridge.
-            setup_hints.append("npm install @whiskeysockets/baileys")
+            env_hints.append("export TAVILY_API_KEY=<your-key>")
+        if search == "perplexity" and not os.environ.get("PERPLEXITY_API_KEY"):
+            console.print(
+                "\n[yellow]Perplexity requires PERPLEXITY_API_KEY.[/yellow] "
+                "Get one at https://perplexity.ai"
+            )
+            env_hints.append("export PERPLEXITY_API_KEY=<your-key>")
 
-        channels_cfg["whatsapp"] = wa_cfg  # type: ignore[assignment]
+        # 6. Optional channel setup (Slack/Discord/WhatsApp/Email/etc.)
+        console.print("\n[bold]Messaging channels (optional):[/bold]")
+        console.print("  Enable channels now, or edit ~/.openhydra/openhydra.yaml later.\n")
 
-    if _yes_no("Enable Email (IMAP + SMTP)?", default=False):
-        channels_cfg["email"] = {"enabled": True}
-        setup_hints.append('uv pip install -e ".[email]"')
-        if not os.environ.get("OPENHYDRA_EMAIL_IMAP_HOST"):
-            env_hints.append("export OPENHYDRA_EMAIL_IMAP_HOST=<imap-host>")
-        if not os.environ.get("OPENHYDRA_EMAIL_SMTP_HOST"):
-            env_hints.append("export OPENHYDRA_EMAIL_SMTP_HOST=<smtp-host>")
-        if not os.environ.get("OPENHYDRA_EMAIL_USERNAME"):
-            env_hints.append("export OPENHYDRA_EMAIL_USERNAME=<user@example.com>")
-        if not os.environ.get("OPENHYDRA_EMAIL_PASSWORD"):
-            env_hints.append("export OPENHYDRA_EMAIL_PASSWORD=<password-or-app-password>")
+        if _yes_no("Enable Slack (Socket Mode)?", default=False):
+            channels_cfg["slack"] = {"enabled": True}
+            if not os.environ.get("OPENHYDRA_SLACK_BOT_TOKEN"):
+                env_hints.append("export OPENHYDRA_SLACK_BOT_TOKEN=<xoxb-...>")
+            if not os.environ.get("OPENHYDRA_SLACK_APP_TOKEN"):
+                env_hints.append("export OPENHYDRA_SLACK_APP_TOKEN=<xapp-...>")
+
+        if _yes_no("Enable Discord?", default=False):
+            channels_cfg["discord"] = {"enabled": True}
+            if not os.environ.get("OPENHYDRA_DISCORD_BOT_TOKEN"):
+                env_hints.append("export OPENHYDRA_DISCORD_BOT_TOKEN=<your-token>")
+
+        if _yes_no("Enable WhatsApp?", default=False):
+            backend = _pick_option(
+                "WhatsApp backend",
+                [
+                    ("baileys", "Baileys (QR login, WhatsApp Web)"),
+                    ("cloud-api", "Cloud API (webhook, Meta business account)"),
+                ],
+                default="baileys",
+            )
+            wa_cfg: dict[str, object] = {"enabled": True, "backend": backend}
+            if backend == "cloud-api":
+                phone_number_id = console.input("Meta phone_number_id: ").strip()
+                verify_token = console.input("Webhook verify token: ").strip()
+                if phone_number_id:
+                    wa_cfg["phone_number_id"] = phone_number_id
+                if verify_token:
+                    wa_cfg["verify_token"] = verify_token
+                if not os.environ.get("OPENHYDRA_WHATSAPP_ACCESS_TOKEN"):
+                    env_hints.append("export OPENHYDRA_WHATSAPP_ACCESS_TOKEN=<your-token>")
+                setup_hints.append(
+                    "Expose the web server publicly and register webhook: "
+                    "https://<public-host>/webhooks/whatsapp"
+                )
+            else:
+                setup_hints.append(
+                    "Baileys dependency auto-installs on first `openhydra serve` (requires npm)."
+                )
+
+            channels_cfg["whatsapp"] = wa_cfg  # type: ignore[assignment]
+
+        if _yes_no("Enable Email (IMAP + SMTP)?", default=False):
+            channels_cfg["email"] = {"enabled": True}
+            setup_hints.append('uv pip install -e ".[email]"')
+            if not os.environ.get("OPENHYDRA_EMAIL_IMAP_HOST"):
+                env_hints.append("export OPENHYDRA_EMAIL_IMAP_HOST=<imap-host>")
+            if not os.environ.get("OPENHYDRA_EMAIL_SMTP_HOST"):
+                env_hints.append("export OPENHYDRA_EMAIL_SMTP_HOST=<smtp-host>")
+            if not os.environ.get("OPENHYDRA_EMAIL_USERNAME"):
+                env_hints.append("export OPENHYDRA_EMAIL_USERNAME=<user@example.com>")
+            if not os.environ.get("OPENHYDRA_EMAIL_PASSWORD"):
+                env_hints.append("export OPENHYDRA_EMAIL_PASSWORD=<password-or-app-password>")
 
     # 7. Generate API key
     api_key = secrets.token_hex(16)
@@ -275,6 +287,7 @@ def run_init_wizard() -> None:
 
     # Summary
     console.print(f"\n[bold green]Config written to {config_path}[/bold green]")
+    console.print(f"  Mode:     {'quick' if quick else 'full'}")
     console.print(f"  Provider: {provider}")
     console.print(f"  Browser:  {' → '.join(browser)}")
     console.print(f"  Search:   {search}")

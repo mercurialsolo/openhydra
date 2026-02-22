@@ -6,15 +6,24 @@ Lightweight, local-first multi-agent orchestration. One command, no Docker, no e
 
 ```bash
 # Install
-uv pip install -e ".[all]"
+uv pip install -e .
 
-# Optional: interactive setup (writes ~/.openhydra/openhydra.yaml and can enable channels)
-uv run openhydra init
+# Recommended: quick onboarding (writes ~/.openhydra/openhydra.yaml with safe defaults)
+uv run openhydra onboard
+
+# Validate setup and channel/provider prerequisites
+uv run openhydra doctor
 
 # Run a one-off workflow
 uv run openhydra run "Build a Python CLI that converts CSV to JSON"
 
-# Or run the server (web API + any enabled channels)
+# Optional: full interactive setup (providers/tools/channels)
+uv run openhydra init
+
+# Optional: install channel/web extras before serving
+uv pip install -e ".[all]"
+
+# Run the server (web API + any enabled channels)
 uv run openhydra serve
 
 # Scaffold a new role agent in config/roles.yaml
@@ -24,41 +33,24 @@ uv run openhydra agent scaffold eng.docs --description "Writes implementation do
 uv run openhydra agent scaffold --interactive
 ```
 
-## What It Does
+Need full setup and configuration details (all settings, env vars, and customization points)?
+See [SETUP.md](SETUP.md).
 
-OpenHydra takes a task description and executes it through a pipeline of specialized AI agents — each with its own role, tools, skills, and quality gates. Think of it as a lightweight version of a multi-agent system that runs entirely on your laptop.
+### Setup Doctor
+
+Validate your local runtime, default provider, and enabled channel prerequisites:
 
 ```bash
-openhydra run "Build a Python CLI that converts CSV to JSON"
+# normal mode (fails only on hard errors)
+uv run openhydra doctor
+
+# strict mode (warnings also fail)
+uv run openhydra doctor --strict
 ```
-
-This will:
-1. **Plan** — Analyze the task and compose a step-by-step execution plan
-2. **Execute** — Run each step with the right agent role (engineer, tester, reviewer)
-3. **Gate** — Check quality between steps, ask for human input when needed
-4. **Deliver** — Produce the final artifacts in your project directory
-
-## What Tasks Can OpenHydra Help You Do?
-
-OpenHydra is strongest on tasks that need coordination across multiple steps, roles, and checks.
-You describe the outcome, and it builds the execution plan at submit time.
-
-Examples of plan-heavy tasks:
-
-- **Feature delivery from idea to tested code**
-  - `"Add OAuth login with Google and GitHub, wire session handling, and add tests"`
-- **Complex refactors with safety checks**
-  - `"Migrate this Flask API to FastAPI without breaking existing endpoints"`
-- **Bug investigation + regression prevention**
-  - `"Find and fix the intermittent checkout timeout and add regression coverage"`
-- **Product-to-engineering handoff in one run**
-  - `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
-- **Cross-cutting upgrades**
-  - `"Upgrade to Pydantic v2, fix breaking changes, and verify CLI behavior"`
 
 ## Planning On The Fly (No Manual Plan File)
 
-You do not need to write a plan first. Submit the task directly:
+You do not need to write a plan first. Submit the outcome directly:
 
 ```bash
 uv run openhydra run "Migrate this Flask API to FastAPI without breaking existing endpoints" --watch
@@ -85,16 +77,41 @@ To inspect the generated plan and step-by-step progress:
 uv run openhydra status <workflow_id>
 ```
 
+## What OpenHydra Helps You Achieve
+
+OpenHydra is strongest for work that needs:
+
+- multi-step planning with dependencies, checks, and retries
+- coordination across multiple tools (code, tests, browser/search, channels)
+- runtime selection of the right role, tools, and skills instead of one fixed script
+
+Examples:
+
+- `"Add OAuth login with Google and GitHub, wire session handling, and add tests"`
+- `"Migrate this Flask API to FastAPI without breaking existing endpoints"`
+- `"Find and fix the intermittent checkout timeout and add regression coverage"`
+- `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
+- `"Compare open-source eval frameworks for LLM apps, rank tradeoffs, and produce a recommendation memo with links"`
+- `"Audit dependencies for known CVEs, patch low-risk updates, and verify with tests"`
+- `"Review open GitHub issues, cluster duplicates/themes, and propose a prioritized sprint plan"`
+- `"Create a weekly maintenance report covering test health, dependency drift, and release readiness"`
+
 ## Talk To OpenHydra Agents From Any Channel
 
 OpenHydra runs one orchestration engine and lets you talk to it from multiple channels.
-You can submit work from Web, WhatsApp, or Slack, and get progress/final updates back in that channel.
+You can submit work from Web, Slack, WhatsApp, or Discord, and get progress/final updates back in that channel.
 
 Basic flow:
 
 1. Enable the channels you want in `.openhydra/openhydra.yaml`
 2. Start the server with `uv run openhydra serve`
 3. Send your task from your preferred channel
+
+Recommended channel setup order:
+
+1. Slack
+2. WhatsApp
+3. Discord
 
 Example channel config:
 
@@ -124,6 +141,9 @@ See `CONTRIBUTING.md` for the contributor workflow, checks, and PR requirements.
 
 ## Configuration
 
+For the complete setup and configuration reference (all categories, env vars, and customization),
+see [SETUP.md](SETUP.md).
+
 OpenHydra loads config in this order:
 1. `.openhydra/openhydra.yaml` (project-local)
 2. `~/.openhydra/openhydra.yaml` (user-global)
@@ -139,9 +159,9 @@ web:
 channels:
   slack:
     enabled: false
-  discord:
-    enabled: false
   whatsapp:
+    enabled: false
+  discord:
     enabled: false
   email:
     enabled: false
@@ -157,7 +177,7 @@ channels:
     backend: "baileys"
 ```
 
-## Channels (Web, Slack, Discord, WhatsApp, Email)
+## Channels (Web, Slack, WhatsApp, Discord, Email)
 
 Start all enabled channels with:
 ```bash
@@ -184,10 +204,10 @@ npx -y wscat -c "ws://127.0.0.1:7070/api/v1/ws?api_key=<web.api_key>"
 
 - **Web API (default)**: REST + WebSocket event stream at `/api/v1/ws`. `serve` auto-generates `web.api_key` in `~/.openhydra/openhydra.yaml` if missing. Use `X-API-Key: <key>` for REST, and `?api_key=<key>` for WebSocket.
 - **Slack (Socket Mode)**: set `channels.slack.enabled: true`, plus `OPENHYDRA_SLACK_BOT_TOKEN` (`xoxb-...`) and `OPENHYDRA_SLACK_APP_TOKEN` (`xapp-...`). For access control, set `channels.slack.allowed_users` or pre-authorize via `openhydra auth add slack:<U123...>`.
-- **Discord**: set `channels.discord.enabled: true` and `OPENHYDRA_DISCORD_BOT_TOKEN`. Use `/hydra run <task>` in a server where the bot is installed. Restrict with `channels.discord.allowed_users` or `openhydra auth add discord:<user_id>`.
 - **WhatsApp**
-  - **Baileys (QR, local WhatsApp Web)**: set `channels.whatsapp.enabled: true`, `channels.whatsapp.backend: "baileys"`, and install the Node dep: `npm install @whiskeysockets/baileys`. Set `channels.whatsapp.auth_dir` (recommended) to avoid writing WhatsApp auth files into the repo. The QR payload is emitted as an event `whatsapp.qr` with `data.qr_data` on the WebSocket; render it as a QR code and scan in WhatsApp. Restrict with `channels.whatsapp.allowed_phones` or `openhydra auth add whatsapp:<phone>`.
+  - **Baileys (QR, local WhatsApp Web)**: set `channels.whatsapp.enabled: true` and `channels.whatsapp.backend: "baileys"`. On first `openhydra serve`, OpenHydra auto-installs `@whiskeysockets/baileys` (requires `npm`) and uses `channels.whatsapp.auth_dir` (defaults to `~/.openhydra/whatsapp_auth`) for auth state. The QR payload is emitted as event `whatsapp.qr` with `data.qr_data` on the WebSocket; render it as a QR code and scan in WhatsApp. Restrict with `channels.whatsapp.allowed_phones` or `openhydra auth add whatsapp:<phone>`.
   - **Cloud API (webhook)**: set `channels.whatsapp.backend: "cloud-api"`, configure `channels.whatsapp.phone_number_id` + `channels.whatsapp.verify_token`, and set `OPENHYDRA_WHATSAPP_ACCESS_TOKEN`. Expose the web server publicly and register the webhook at `https://<public-host>/webhooks/whatsapp`.
+- **Discord**: set `channels.discord.enabled: true` and `OPENHYDRA_DISCORD_BOT_TOKEN`. Use `/hydra run <task>` in a server where the bot is installed. Restrict with `channels.discord.allowed_users` or `openhydra auth add discord:<user_id>`.
 - **Email (IMAP + SMTP)**: install deps with `uv pip install -e ".[email]"`, set `channels.email.enabled: true`, and configure IMAP/SMTP + credentials (env vars like `OPENHYDRA_EMAIL_IMAP_HOST`, `OPENHYDRA_EMAIL_USERNAME`, `OPENHYDRA_EMAIL_PASSWORD`). Actionable emails are submitted as workflows, and terminal results are emailed back to the sender.
 
 ## Custom Channels
@@ -227,7 +247,7 @@ Enable with `builder_enabled: true` if you want on-the-fly generation.
 
 ## Documentation
 
-- [README.md](README.md) — install, run, core configuration, and channel setup.
+- [SETUP.md](SETUP.md) — comprehensive setup, configuration categories, env vars, and customization.
 - [SPEC.md](SPEC.md) — architecture, protocols, and extension APIs.
 - [PLAN.md](PLAN.md) — implementation roadmap and phase status.
 - [CLAUDE.md](CLAUDE.md) — maintainer conventions and project notes.

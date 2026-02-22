@@ -70,6 +70,37 @@ roles:
       - type: quality
         threshold: 24
 
+  research:
+    name: "Engineer - Research"
+    description: "Performs web and browser-based research, then produces actionable summaries"
+    model: claude-sonnet-4-5-20250929
+    skill_packs:
+      - coding_principles
+    allowed_tools:
+      - Read
+      - Write
+      - Glob
+      - Grep
+      - WebSearch
+      - WebFetch
+      - BrowserNavigate
+      - BrowserRead
+      - BrowserClick
+      - BrowserType
+      - BrowserScreenshot
+    output_schema: eng_output
+    budget:
+      max_tokens: 120000
+      max_tool_calls: 250
+      max_duration_minutes: 30
+    context_budget:
+      skills_pct: 25
+      memory_pct: 15
+      reasoning_pct: 60
+    gates:
+      - type: quality
+        threshold: 24
+
   eng.implement:
     name: "Engineer - Implementation"
     description: "Implements features based on plans and specs"

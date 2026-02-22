@@ -13,11 +13,19 @@ OpenHydra is a lightweight, local-first multi-agent orchestration system. Single
 ## Commands
 
 ```bash
-# Install
-uv pip install -e ".[all]"
+# Install (minimal)
+uv pip install -e .
 
 # Run CLI
 uv run openhydra --help
+
+# Recommended first-run setup and validation
+uv run openhydra onboard
+uv run openhydra doctor
+
+# Optional: full interactive setup and all extras
+uv run openhydra init
+uv pip install -e ".[all]"
 
 # Run tests
 uv run pytest

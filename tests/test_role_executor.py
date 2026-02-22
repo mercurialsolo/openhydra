@@ -95,14 +95,14 @@ async def test_messages_in_prompt(executor: RoleExecutor, mock_provider: AsyncMo
 async def test_objectives_and_context_reads_in_prompt(
     executor: RoleExecutor, mock_provider: AsyncMock
 ) -> None:
-    executor._roles._roles["eng.research"] = RoleDefinition(
-        id="eng.research",
+    executor._roles._roles["research"] = RoleDefinition(
+        id="research",
         name="Research Agent",
         description="Investigates options.",
         objectives=["Identify tradeoffs", "Recommend path"],
         context_reads=["Architecture docs", "Previous ADRs"],
     )
-    await executor.execute("eng.research", "Plan an approach")
+    await executor.execute("research", "Plan an approach")
     call_kwargs = mock_provider.run_session.call_args[1]
     prompt = call_kwargs["system_prompt"]
     assert "Objectives" in prompt
