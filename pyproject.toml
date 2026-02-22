@@ -24,7 +24,7 @@ vec = ["sqlite-vec>=0.1"]
 web = ["starlette>=0.36", "uvicorn>=0.27", "httpx>=0.25"]
 slack = ["slack-bolt>=1.18"]
 discord = ["discord.py>=2.3"]
-whatsapp = []  # Baileys runs as Node.js subprocess, no Python deps; cloud-api needs httpx
+whatsapp = ["qrcode>=8.0"]  # terminal QR rendering for Baileys pairing
 email = ["aioimaplib>=1.0", "aiosmtplib>=3.0"]
 channels = [
     "starlette>=0.36",
@@ -32,6 +32,7 @@ channels = [
     "httpx>=0.25",
     "slack-bolt>=1.18",
     "discord.py>=2.3",
+    "qrcode>=8.0",
 ]
 all = [
     "claude-agent-sdk>=0.1.30",

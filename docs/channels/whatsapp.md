@@ -13,6 +13,11 @@ OpenHydra supports two backends:
 
 1. Node.js and npm installed.
 2. OpenHydra installed locally.
+3. Recommended: install WhatsApp extras for terminal QR rendering:
+
+```bash
+uv pip install -e ".[whatsapp]"
+```
 
 ### Step 1: Enable WhatsApp Baileys in Config
 
@@ -41,9 +46,15 @@ uv run openhydra serve
 
 ### Step 3: Pair WhatsApp
 
-1. Subscribe to the WebSocket stream (`/api/v1/ws`) and watch for event `whatsapp.qr`.
-2. Read `data.qr_data` from that event.
-3. Render it as a QR code and scan from WhatsApp on your phone.
+1. Run `uv run openhydra serve`.
+2. OpenHydra prints the pairing QR directly in your terminal.
+3. Scan that QR from WhatsApp on your phone.
+
+Fallback (only if terminal QR rendering is unavailable):
+
+1. Subscribe to `/api/v1/ws`.
+2. Watch for event `whatsapp.qr`.
+3. Render `data.qr_data` externally as a QR code.
 
 ### Step 4: Verify
 
