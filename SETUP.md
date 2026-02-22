@@ -253,7 +253,6 @@ channels:
 
   whatsapp:
     enabled: false
-    backend: "baileys"      # baileys | cloud-api
     node_path: "node"
     auth_dir: "~/.openhydra/whatsapp_auth"
     allowed_phones: []
@@ -285,11 +284,11 @@ channels:
 Channel-specific minimums:
 
 1. Slack: `enabled=true` + bot/app tokens
-2. WhatsApp Baileys: `enabled=true`, `backend=baileys`, Node/npm installed
-   (OpenHydra auto-installs `@whiskeysockets/baileys` on first start and prints pairing QR in terminal)
-3. WhatsApp Cloud API: web channel enabled + phone/verify/access token configured
-4. Discord: `enabled=true` + bot token
-5. Email: IMAP/SMTP host + username + auth credentials
+2. WhatsApp: `enabled=true`, Node/npm installed
+   (OpenHydra auto-installs required WhatsApp bridge dependency on first start and prints
+   pairing QR in terminal)
+3. Discord: `enabled=true` + bot token
+4. Email: IMAP/SMTP host + username + auth credentials
 
 Detailed step-by-step channel guides:
 
@@ -338,7 +337,7 @@ These are the main env vars currently supported by `load_config()` and channel/p
 
 ### WhatsApp
 
-- `OPENHYDRA_WHATSAPP_ACCESS_TOKEN` (cloud-api backend)
+- No additional environment variable is required for local QR pairing.
 
 ### Discord
 
