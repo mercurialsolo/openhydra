@@ -9,7 +9,8 @@ import pytest
 
 from openhydra.agents.base import SessionResult
 from openhydra.agents.registry import AgentRegistry
-from openhydra.roles.catalog import RoleCatalog
+from openhydra.memory.base import MemoryEntry
+from openhydra.roles.catalog import RoleCatalog, RoleDefinition
 from openhydra.roles.executor import RoleExecutor
 from openhydra.skills.registry import SkillRegistry
 from openhydra.skills.sources.filesystem import FilesystemSkillSource
@@ -91,6 +92,25 @@ async def test_messages_in_prompt(executor: RoleExecutor, mock_provider: AsyncMo
     assert "Project scaffolded" in call_kwargs["system_prompt"]
 
 
+async def test_objectives_and_context_reads_in_prompt(
+    executor: RoleExecutor, mock_provider: AsyncMock
+) -> None:
+    executor._roles._roles["eng.research"] = RoleDefinition(
+        id="eng.research",
+        name="Research Agent",
+        description="Investigates options.",
+        objectives=["Identify tradeoffs", "Recommend path"],
+        context_reads=["Architecture docs", "Previous ADRs"],
+    )
+    await executor.execute("eng.research", "Plan an approach")
+    call_kwargs = mock_provider.run_session.call_args[1]
+    prompt = call_kwargs["system_prompt"]
+    assert "Objectives" in prompt
+    assert "Identify tradeoffs" in prompt
+    assert "Readable Context/Data" in prompt
+    assert "Architecture docs" in prompt
+
+
 async def test_memory_stored_after_execution(mock_provider: AsyncMock) -> None:
     roles = RoleCatalog()
     roles.load(Path(__file__).parent.parent / "config" / "roles.yaml")
@@ -108,3 +128,31 @@ async def test_memory_stored_after_execution(mock_provider: AsyncMock) -> None:
     memory.store.assert_called_once()
     call_kwargs = memory.store.call_args[1]
     assert call_kwargs["collection"] == "role:planner"
+
+
+async def test_session_context_in_prompt(mock_provider: AsyncMock) -> None:
+    roles = RoleCatalog()
+    roles.load(Path(__file__).parent.parent / "config" / "roles.yaml")
+    agents = AgentRegistry()
+    agents.register(mock_provider, default=True)
+    skills = SkillRegistry()
+
+    memory = AsyncMock()
+    memory.search = AsyncMock(return_value=[])
+    memory.list_collections = AsyncMock(return_value=[])
+    memory.list_entries = AsyncMock(return_value=[
+        MemoryEntry(id="m1", content="USER: hi"),
+        MemoryEntry(id="m2", content="ASSISTANT: hello"),
+    ])
+    memory.store = AsyncMock(return_value="entry-id")
+
+    executor = RoleExecutor(roles=roles, agents=agents, skills=skills, memory=memory)
+    await executor.execute(
+        "planner",
+        "Follow up question",
+        context={"session_key": "slack:U1"},
+    )
+
+    call_kwargs = mock_provider.run_session.call_args[1]
+    assert "Session Context" in call_kwargs["system_prompt"]
+    assert "USER: hi" in call_kwargs["system_prompt"]

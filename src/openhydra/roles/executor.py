@@ -78,7 +78,7 @@ class RoleExecutor:
         skill_text = await self._provision_skills(role)
 
         # 2. Search memory for relevant context
-        memory_text = await self._search_memory(role_id, instructions)
+        memory_text = await self._search_memory(role_id, instructions, context=context)
 
         # 3. Assemble system prompt
         system_prompt = self._assemble_prompt(role, skill_text, memory_text, context, messages)
@@ -200,12 +200,44 @@ class RoleExecutor:
             parts.append(skill.text)
         return "\n\n".join(parts)
 
-    async def _search_memory(self, role_id: str, instructions: str) -> str:
-        """Search memory for relevant context with success-weighted re-ranking."""
+    async def _search_memory(
+        self,
+        role_id: str,
+        instructions: str,
+        *,
+        context: dict[str, Any] | None = None,
+    ) -> str:
+        """Search memory for relevant context with success-weighted re-ranking.
+
+        If a ``session_key`` is present in *context*, also inject recent
+        per-session memories to preserve conversational continuity across
+        separate workflows.
+        """
         if not self._memory:
             return ""
 
         try:
+            sections: list[str] = []
+
+            # --- Session context (recent messages) ---
+            session_key = ""
+            if isinstance(context, dict):
+                session_key = str(context.get("session_key") or "")
+            if session_key:
+                try:
+                    coll = f"session:{session_key}"
+                    recent = await self._memory.list_entries(
+                        coll, limit=8, oldest_first=False,
+                    )
+                    if recent:
+                        recent = list(reversed(recent))  # chronological
+                        lines = ["## Session Context"]
+                        for entry in recent:
+                            lines.append(f"- {entry.content}")
+                        sections.append("\n".join(lines))
+                except Exception:
+                    pass
+
             # Fetch from own collection
             own_entries = await self._memory.search(
                 collection=f"role:{role_id}",
@@ -244,13 +276,14 @@ class RoleExecutor:
             top = scored[:5]
 
             if not top:
-                return ""
+                return "\n\n".join(sections) if sections else ""
 
             parts = ["## Relevant Memory"]
             for _, entry, marker in top:
                 prefix = f"{marker} " if marker else ""
                 parts.append(f"- {prefix}{entry.content}")
-            return "\n".join(parts)
+            sections.append("\n".join(parts))
+            return "\n\n".join(sections)
         except Exception:
             return ""
 
@@ -289,6 +322,12 @@ class RoleExecutor:
         if self._assistant_text:
             sections.append(self._assistant_text)
         sections.extend([f"# Role: {role.name}", role.description])
+        if role.objectives:
+            sections.append("## Objectives")
+            sections.extend(f"- {objective}" for objective in role.objectives)
+        if role.context_reads:
+            sections.append("## Readable Context/Data")
+            sections.extend(f"- {source}" for source in role.context_reads)
 
         # Previous step outputs
         prev_outputs = context.get("previous_outputs")
