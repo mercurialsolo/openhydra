@@ -282,7 +282,10 @@ def _doctor_whatsapp_check(cfg: OpenHydraConfig) -> list[DoctorCheck]:
             detail=f"`{wa.node_path or 'node'}` executable detected."
             if node_ok
             else f"`{wa.node_path or 'node'}` not found on PATH.",
-            hint="Install Node.js or set channels.whatsapp.node_path.",
+            hint=(
+                "Install Node.js/npm or set channels.whatsapp.node_path. "
+                "OpenHydra auto-installs @whiskeysockets/baileys on first start."
+            ),
         )
     )
     return checks

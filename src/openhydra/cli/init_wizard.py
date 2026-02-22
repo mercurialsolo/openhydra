@@ -225,8 +225,9 @@ def run_init_wizard(*, quick: bool = False) -> None:
                     "https://<public-host>/webhooks/whatsapp"
                 )
             else:
-                # Baileys requires a Node dependency for the bridge.
-                setup_hints.append("npm install @whiskeysockets/baileys")
+                setup_hints.append(
+                    "Baileys dependency auto-installs on first `openhydra serve` (requires npm)."
+                )
 
             channels_cfg["whatsapp"] = wa_cfg  # type: ignore[assignment]
 
