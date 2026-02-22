@@ -29,11 +29,11 @@ uv pip install -e ".[all]"
 # Run the server (web API + any enabled channels)
 uv run openhydra serve
 
-# Scaffold a new role agent in config/roles.yaml
-uv run openhydra agent scaffold eng.docs --description "Writes implementation docs"
+# Set up a new role agent in config/agents.yaml
+uv run openhydra agent setup eng.docs --description "Writes implementation docs"
 
-# Interactive scaffold (prompts for objectives, skills, tools, and context/data)
-uv run openhydra agent scaffold --interactive
+# Interactive setup (prompts for objectives, skills, tools, and context/data)
+uv run openhydra agent setup --interactive
 ```
 
 Need full setup and configuration details (all settings, env vars, and customization points)?
@@ -44,7 +44,7 @@ See [SETUP.md](SETUP.md).
 
 - planning with dependencies, checks, and retries
 - using multiple tools (code, tests, docs, browser/search, channels)
-- selection of the right role, tools, and skills instead of one fixed script
+- selecting the right role, tools, and skills instead of one fixed script
 
 Personal planning and assistant tasks:
 - `"Plan my Tokyo trip from May 12-20: flights from SFO, vegetarian options near Shinjuku, and a day-by-day itinerary under $3,500"`
@@ -153,7 +153,7 @@ See `CONTRIBUTING.md` for the contributor workflow, checks, and PR requirements.
 - [PLAN.md](PLAN.md) — implementation roadmap and phase status.
 - [CLAUDE.md](CLAUDE.md) — maintainer conventions and project notes.
 - [AGENTS.md](AGENTS.md) — repository contribution and workflow guidelines.
-- [config/roles.yaml](config/roles.yaml) — default role catalog and gate configuration.
+- [config/agents.yaml](config/agents.yaml) — default role catalog and gate configuration.
 
 ## Status
 

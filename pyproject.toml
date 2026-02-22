@@ -49,6 +49,7 @@ all = [
 
 [project.scripts]
 openhydra = "openhydra.cli.main:app"
+oh = "openhydra.cli.main:app"
 
 [project.entry-points."openhydra.channels"]
 web = "openhydra.channels.web:create_channel"

@@ -354,8 +354,8 @@ class RoleExecutor:
 
         return "\n\n".join(sections)
 
-    # Abstract tool names used in roles.yaml → concrete names from providers.
-    # First match wins, so roles.yaml stays provider-agnostic.
+    # Abstract tool names used in agents.yaml → concrete names from providers.
+    # First match wins, so agents.yaml stays provider-agnostic.
     _TOOL_ALIASES: dict[str, list[str]] = {
         "WebSearch": ["tavily_search", "duckduckgo_search", "perplexity_ask"],
         "WebFetch": ["tavily_extract", "duckduckgo_fetch", "perplexity_research"],
@@ -390,7 +390,7 @@ class RoleExecutor:
             [tools] — filtered list matching allowed_tools names
 
         Abstract names in ``_TOOL_ALIASES`` are resolved against the
-        available tool set so roles.yaml doesn't need to change when the
+        available tool set so agents.yaml doesn't need to change when the
         user switches search or browser providers.
         """
         if not self._tool_executor:

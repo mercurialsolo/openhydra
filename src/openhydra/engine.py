@@ -56,7 +56,7 @@ class Engine:
         # Connect database
         await self.db.connect()
 
-        # Load roles from config/roles.yaml
+        # Load roles from config/agents.yaml
         self._load_roles()
 
         # Load ASSISTANT.md constitutional document
@@ -303,11 +303,23 @@ class Engine:
 
     def _load_roles(self) -> None:
         """Load role definitions from config directory."""
-        roles_path = Path("config") / "roles.yaml"
-        if roles_path.exists():
-            self.roles.load(roles_path)
+        agents_path = Path("config") / "agents.yaml"
+        if agents_path.exists():
+            self.roles.load(agents_path)
         else:
+            # Backward compatibility for older config path
+            legacy_roles_path = Path("config") / "roles.yaml"
+            if legacy_roles_path.exists():
+                self.roles.load(legacy_roles_path)
+                return
+
             # Try relative to package
+            pkg_agents = Path(__file__).parent.parent.parent / "config" / "agents.yaml"
+            if pkg_agents.exists():
+                self.roles.load(pkg_agents)
+                return
+
+            # Backward compatibility for older package path
             pkg_roles = Path(__file__).parent.parent.parent / "config" / "roles.yaml"
             if pkg_roles.exists():
                 self.roles.load(pkg_roles)

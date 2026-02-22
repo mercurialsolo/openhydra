@@ -31,7 +31,7 @@ class ContextBudgetConfig:
 
 @dataclass
 class RoleDefinition:
-    """A role configuration loaded from roles.yaml."""
+    """A role configuration loaded from agents.yaml."""
 
     id: str
     name: str

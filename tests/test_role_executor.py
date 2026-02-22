@@ -19,7 +19,7 @@ from openhydra.skills.sources.filesystem import FilesystemSkillSource
 @pytest.fixture
 def roles() -> RoleCatalog:
     catalog = RoleCatalog()
-    catalog.load(Path(__file__).parent.parent / "config" / "roles.yaml")
+    catalog.load(Path(__file__).parent.parent / "config" / "agents.yaml")
     return catalog
 
 
@@ -113,7 +113,7 @@ async def test_objectives_and_context_reads_in_prompt(
 
 async def test_memory_stored_after_execution(mock_provider: AsyncMock) -> None:
     roles = RoleCatalog()
-    roles.load(Path(__file__).parent.parent / "config" / "roles.yaml")
+    roles.load(Path(__file__).parent.parent / "config" / "agents.yaml")
     agents = AgentRegistry()
     agents.register(mock_provider, default=True)
     skills = SkillRegistry()
@@ -132,7 +132,7 @@ async def test_memory_stored_after_execution(mock_provider: AsyncMock) -> None:
 
 async def test_session_context_in_prompt(mock_provider: AsyncMock) -> None:
     roles = RoleCatalog()
-    roles.load(Path(__file__).parent.parent / "config" / "roles.yaml")
+    roles.load(Path(__file__).parent.parent / "config" / "agents.yaml")
     agents = AgentRegistry()
     agents.register(mock_provider, default=True)
     skills = SkillRegistry()

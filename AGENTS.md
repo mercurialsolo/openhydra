@@ -3,7 +3,7 @@
 ## Project Structure
 - `src/openhydra/`: core engine + built-in adapters (`workflow/`, `agents/`, `skills/`, `memory/`, `tools/`, `channels/`, `gates/`).
 - `src/openhydra/cli/`: Typer CLI entrypoints (`openhydra ...`).
-- `config/roles.yaml`: role catalog/config (roles are data, not code).
+- `config/agents.yaml`: role catalog/config (roles are data, not code).
 - `skills/`: bundled starter skills (`SKILL.md` + `metadata.yaml`).
 - `tests/`: pytest suite (`test_*.py`).
 - `SPEC.md` / `PLAN.md` / `CLAUDE.md`: architecture notes and conventions.

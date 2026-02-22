@@ -50,7 +50,7 @@ uv run ruff check src/ tests/
 3. **State survives crashes.** Every state transition writes to SQLite before execution.
 4. **Skills are files.** SKILL.md + metadata.yaml on disk. No database for skill content.
 5. **Skills can be generated.** `SkillBuilder` can generate skills on-the-fly via LLM when not found on disk. Disabled by default (`skills.builder_enabled: false`); generated skills are written to `~/.openhydra/generated_skills/` and scored with a heuristic quality gate before acceptance.
-6. **Roles are config.** `config/roles.yaml` defines behavior. No role-specific code.
+6. **Roles are config.** `config/agents.yaml` defines behavior. No role-specific code.
 7. **Events decouple.** Core emits events, interfaces subscribe. No callbacks or direct coupling.
 
 ## File Layout

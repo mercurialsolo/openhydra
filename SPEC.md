@@ -360,7 +360,7 @@ Built-in embedding providers:
 Roles define how agents behave during a step. A role is a configuration, not a process.
 
 ```yaml
-# config/roles.yaml
+# config/agents.yaml
 roles:
   pm.prd:
     name: "Product Manager - PRD Writer"

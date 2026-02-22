@@ -20,7 +20,7 @@ from openhydra.workflow.workspace import Workspace
 @pytest.fixture
 def roles() -> RoleCatalog:
     catalog = RoleCatalog()
-    catalog.load(Path(__file__).parent.parent / "config" / "roles.yaml")
+    catalog.load(Path(__file__).parent.parent / "config" / "agents.yaml")
     return catalog
 
 
