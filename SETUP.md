@@ -12,11 +12,17 @@ OpenHydra supports two operating modes:
 2. **Server/channels mode**: run `openhydra serve`, then submit work through:
    - Web API/WebSocket
    - Slack
-   - Discord
    - WhatsApp
+   - Discord
    - Email
 
 If you are starting from zero, use CLI mode first and add channels later.
+
+Recommended channel setup order:
+
+1. Slack
+2. WhatsApp
+3. Discord
 
 ## Quick Setup Paths
 
@@ -134,7 +140,7 @@ These top-level sections come from `OpenHydraConfig` in `src/openhydra/config.py
 4. `skills` - skill sources and dynamic skill builder behavior
 5. `tools` - MCP server registrations and templates
 6. `web` - host/port/API key for the web interface
-7. `channels` - Slack/Discord/WhatsApp/Email + channel runtime controls
+7. `channels` - Slack/WhatsApp/Discord/Email + channel runtime controls
 8. `heartbeat` - recurring/active-hour automation behavior
 
 ## Detailed Settings
@@ -245,16 +251,16 @@ channels:
     enabled: false
     allowed_users: []
 
-  discord:
-    enabled: false
-    allowed_users: []
-
   whatsapp:
     enabled: false
     backend: "baileys"      # baileys | cloud-api
     node_path: "node"
     auth_dir: "~/.openhydra/whatsapp_auth"
     allowed_phones: []
+
+  discord:
+    enabled: false
+    allowed_users: []
 
   email:
     enabled: false
@@ -279,10 +285,10 @@ channels:
 Channel-specific minimums:
 
 1. Slack: `enabled=true` + bot/app tokens
-2. Discord: `enabled=true` + bot token
-3. WhatsApp Baileys: `enabled=true`, `backend=baileys`, Node/npm installed
+2. WhatsApp Baileys: `enabled=true`, `backend=baileys`, Node/npm installed
    (OpenHydra auto-installs `@whiskeysockets/baileys` on first start)
-4. WhatsApp Cloud API: web channel enabled + phone/verify/access token configured
+3. WhatsApp Cloud API: web channel enabled + phone/verify/access token configured
+4. Discord: `enabled=true` + bot token
 5. Email: IMAP/SMTP host + username + auth credentials
 
 ### 8) `heartbeat`
@@ -324,13 +330,13 @@ These are the main env vars currently supported by `load_config()` and channel/p
 - `OPENHYDRA_SLACK_BOT_TOKEN`
 - `OPENHYDRA_SLACK_APP_TOKEN`
 
-### Discord
-
-- `OPENHYDRA_DISCORD_BOT_TOKEN`
-
 ### WhatsApp
 
 - `OPENHYDRA_WHATSAPP_ACCESS_TOKEN` (cloud-api backend)
+
+### Discord
+
+- `OPENHYDRA_DISCORD_BOT_TOKEN`
 
 ### Email
 
