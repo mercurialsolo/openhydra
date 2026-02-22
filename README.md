@@ -53,7 +53,7 @@ Personal planning and assistant tasks:
 - `"Build my next 6-week personal operating plan: gym 4x/week, finish two certifications, and keep Sundays blocked for family"`
 - `"Organize my monthly admin stack: rent, taxes, insurance renewals, and reminders with due dates and fallback actions"`
 
-Work tasks: research and decision support first:
+Research:
 - `"For our seed-stage B2B SaaS (ACV ~$8k), compare 6 competitors' pricing and positioning, then produce a differentiated GTM brief with sources"`
 - `"Review our last 120 support tickets and 40 churn notes, cluster root causes, and propose the top 5 retention experiments by expected impact"`
 - `"Prepare a launch-readiness compliance brief for our AI meeting assistant (US + EU): likely legal risks, mitigations, and questions for counsel"`
@@ -61,7 +61,7 @@ Work tasks: research and decision support first:
 - `"Compare open-source LLM eval frameworks for our RAG product, rank tradeoffs, and produce a recommendation memo with implementation implications"`
 - `"Review open GitHub issues for our checkout service, cluster duplicate themes, and propose a prioritized 2-sprint stabilization plan"`
 
-Work tasks: product development and coding execution:
+Software product development:
 - `"Define and deliver v1 team invites for our app: PRD, rollout plan, implementation, and validation tests"`
 - `"Migrate our Flask billing API to FastAPI without breaking existing /v1 endpoints or auth behavior, then prove parity with tests"`
 - `"Add Google and GitHub OAuth to our web app, preserve existing session behavior, and add integration coverage for login + callback flows"`
