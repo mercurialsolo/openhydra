@@ -48,13 +48,12 @@ uv run openhydra doctor
 uv run openhydra doctor --strict
 ```
 
-## What OpenHydra Helps You Achieve
+## OpenHydra is best for work that needs:
 
-OpenHydra is best for work that needs:
 
-- multi-step planning with dependencies, checks, and retries
-- coordination across multiple tools (code, tests, docs, browser/search, channels)
-- runtime selection of the right role, tools, and skills instead of one fixed script
+- planning with dependencies, checks, and retries
+- using multiple tools (code, tests, docs, browser/search, channels)
+- selection of the right role, tools, and skills instead of one fixed script
 
 Examples:
 
