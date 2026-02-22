@@ -14,6 +14,9 @@ uv run openhydra onboard
 # Validate setup and channel/provider prerequisites
 uv run openhydra doctor
 
+# Optional: strict diagnostics (treat warnings as failures)
+uv run openhydra doctor --strict
+
 # Run a one-off workflow
 uv run openhydra run "Build a Python CLI that converts CSV to JSON"
 
@@ -36,73 +39,35 @@ uv run openhydra agent scaffold --interactive
 Need full setup and configuration details (all settings, env vars, and customization points)?
 See [SETUP.md](SETUP.md).
 
-### Setup Doctor
+## OpenHydra is best for work that needs:
 
-Validate your local runtime, default provider, and enabled channel prerequisites:
 
-```bash
-# normal mode (fails only on hard errors)
-uv run openhydra doctor
+- planning with dependencies, checks, and retries
+- using multiple tools (code, tests, docs, browser/search, channels)
+- selection of the right role, tools, and skills instead of one fixed script
 
-# strict mode (warnings also fail)
-uv run openhydra doctor --strict
-```
+Personal planning and assistant tasks:
+- `"Plan my Tokyo trip from May 12-20: flights from SFO, vegetarian options near Shinjuku, and a day-by-day itinerary under $3,500"`
+- `"Build my next 6-week personal operating plan: gym 4x/week, finish two certifications, and keep Sundays blocked for family"`
+- `"Organize my monthly admin stack: rent, taxes, insurance renewals, and reminders with due dates and fallback actions"`
 
-## Planning On The Fly (No Manual Plan File)
+Research for you:
+- `"For our seed-stage B2B SaaS (ACV ~$8k), compare 6 competitors' pricing and positioning, then produce a differentiated GTM brief with sources"`
+- `"Review our last 120 support tickets and 40 churn notes, cluster root causes, and propose the top 5 retention experiments by expected impact"`
+- `"Prepare a launch-readiness compliance brief for our AI meeting assistant (US + EU): likely legal risks, mitigations, and questions for counsel"`
+- `"Evaluate expansion options across Texas, Florida, and Ontario using market size, regulatory friction, and hiring costs; recommend one for Q3"`
+- `"Compare open-source LLM eval frameworks for our RAG product, rank tradeoffs, and produce a recommendation memo with implementation implications"`
+- `"Review open GitHub issues for our checkout service, cluster duplicate themes, and propose a prioritized 2-sprint stabilization plan"`
+- `"Screen US large-cap stocks, liquid call options, and top Polymarket contracts for this week; recommend 3 risk-defined opportunities with thesis, catalysts, downside case, and confidence score"`
+- `"Find the best recent papers on hierarchical reasoning for agentic products, rank the top 10 by practical relevance, and summarize what we can implement in our roadmap next sprint"`
 
-You do not need to write a plan first. Submit the outcome directly:
-
-```bash
-uv run openhydra run "Migrate this Flask API to FastAPI without breaking existing endpoints" --watch
-```
-
-OpenHydra then:
-
-1. Uses the `planner` role to generate a JSON step graph (`role_id`, `instructions`, `depends_on`)
-2. Persists workflow + steps to SQLite before running (for durability/recovery)
-3. Executes ready steps based on dependencies (independent branches can run concurrently)
-4. Applies role gates (quality/tests/approval) between steps
-5. Reports progress/events and final output
-
-For that FastAPI migration prompt, a typical generated plan could look like:
-
-1. `eng.init`: inventory current Flask routes and migration constraints
-2. `eng.implement`: port app structure and handlers to FastAPI
-3. `test.code`: run/update tests and validate endpoint compatibility
-4. `pm.review`: verify scope completion and release readiness
-
-To inspect the generated plan and step-by-step progress:
-
-```bash
-uv run openhydra status <workflow_id>
-```
-
-## What OpenHydra Helps You Achieve
-
-OpenHydra is strongest for work that needs:
-
-- multi-step planning with dependencies, checks, and retries
-- coordination across multiple tools (code, tests, docs, browser/search, channels)
-- runtime selection of the right role, tools, and skills instead of one fixed script
-
-Examples:
-
-- `"Add OAuth login with Google and GitHub, wire session handling, and add tests"`
-- `"Migrate this Flask API to FastAPI without breaking existing endpoints"`
-- `"Find and fix the intermittent checkout timeout and add regression coverage"`
-- `"Draft a PRD for team invites, implement the MVP, and validate with tests"`
-- `"Compare open-source eval frameworks for LLM apps, rank tradeoffs, and produce a recommendation memo with links"`
-- `"Audit dependencies for known CVEs, patch low-risk updates, and verify with tests"`
-- `"Review open GitHub issues, cluster duplicates/themes, and propose a prioritized sprint plan"`
-- `"Create a weekly maintenance report covering test health, dependency drift, and release readiness"`
-- `"Turn customer interviews and support tickets into a prioritized product roadmap with milestones and risks"`
-- `"Define v1 scope for a customer portal, set success metrics, and sequence a cross-functional launch timeline"`
-- `"Research competitors in the US billing software market, compare pricing/positioning, and produce a GTM brief with sources"`
-- `"Analyze customer feedback across support channels, cluster churn drivers, and propose top retention experiments"`
-- `"Build a 90-day operating plan (product, hiring, partnerships) with weekly checkpoints and risk tracking"`
-- `"Coordinate a multi-city business trip with budget/time constraints and produce an actionable day-by-day itinerary"`
-- `"Map legal/compliance considerations for launching an AI feature, summarize risk areas, and draft counsel questions"`
-- `"Assess economic and regulatory opportunity across target regions and recommend where to expand next quarter"`
+Build software products:
+- `"Define and deliver v1 team invites for our app: PRD, rollout plan, implementation, and validation tests"`
+- `"Migrate our Flask billing API to FastAPI without breaking existing /v1 endpoints or auth behavior, then prove parity with tests"`
+- `"Add Google and GitHub OAuth to our web app, preserve existing session behavior, and add integration coverage for login + callback flows"`
+- `"Find and fix intermittent checkout timeouts seen in production logs, then add a regression test that reproduces the original failure"`
+- `"Audit dependencies for known CVEs, patch low-risk updates, and publish a release-risk summary with test results"`
+- `"Generate a weekly engineering readiness report for our team covering test health, dependency drift, incident carryover, and release blockers"`
 
 ## Talk To OpenHydra Agents From Any Channel
 
@@ -142,6 +107,35 @@ How to talk to agents:
 - **Slack**: send a DM to the bot or `@mention` it in a channel with your task text
 - **WhatsApp**: send a normal message as the task text; control commands like `approve`, `reject <reason>`, `pause`, `resume`, `cancel` are supported. On first setup, `openhydra serve` prints the pairing QR in terminal.
 - **Discord**: run `/hydra` with `action=run` and your task as `argument`
+
+## Planning On The Fly (No Manual Plan File)
+
+You do not need to write a plan first. Submit the outcome directly:
+
+```bash
+uv run openhydra run "Migrate this Flask API to FastAPI without breaking existing endpoints" --watch
+```
+
+OpenHydra then:
+
+1. Uses the `planner` role to generate a JSON step graph (`role_id`, `instructions`, `depends_on`)
+2. Persists workflow + steps to SQLite before running (for durability/recovery)
+3. Executes ready steps based on dependencies (independent branches can run concurrently)
+4. Applies role gates (quality/tests/approval) between steps
+5. Reports progress/events and final output
+
+For that FastAPI migration prompt, a typical generated plan could look like:
+
+1. `eng.init`: inventory current Flask routes and migration constraints
+2. `eng.implement`: port app structure and handlers to FastAPI
+3. `test.code`: run/update tests and validate endpoint compatibility
+4. `pm.review`: verify scope completion and release readiness
+
+To inspect the generated plan and step-by-step progress:
+
+```bash
+uv run openhydra status <workflow_id>
+```
 
 ## Contributing
 
