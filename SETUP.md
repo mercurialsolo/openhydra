@@ -291,6 +291,12 @@ Channel-specific minimums:
 4. Discord: `enabled=true` + bot token
 5. Email: IMAP/SMTP host + username + auth credentials
 
+Detailed step-by-step channel guides:
+
+1. [Slack setup](docs/channels/slack.md)
+2. [WhatsApp setup](docs/channels/whatsapp.md)
+3. [Discord setup](docs/channels/discord.md)
+
 ### 8) `heartbeat`
 
 Controls periodic autonomous execution and delivery windows.
