@@ -93,7 +93,7 @@ Build software products:
 - `"Audit dependencies for known CVEs, patch low-risk updates, and publish a release-risk summary with test results"`
 - `"Generate a weekly engineering readiness report for our team covering test health, dependency drift, incident carryover, and release blockers"`
 
-## Talk To OpenHydra Agents From Any Channel
+## Talk to OpenHydra from any channel
 
 OpenHydra runs one orchestration engine and lets you talk to it from multiple channels.
 You can submit work from Web, Slack, WhatsApp, or Discord, and get progress/final updates back in that channel.
