@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -34,14 +35,22 @@ class FakeProcess:
 
 def make_stdout_reader(lines: list[str]):
     """Create a mock stdout that yields lines."""
-    queue = asyncio.Queue()
-    for line in lines:
-        queue.put_nowait((line + "\n").encode())
-    queue.put_nowait(b"")  # EOF
+    payload = "".join(f"{line}\n" for line in lines).encode()
+    chunk_size = 4096
 
     class FakeStdout:
-        async def readline(self):
-            return await queue.get()
+        def __init__(self) -> None:
+            self._offset = 0
+
+        async def read(self, n: int = -1):
+            if self._offset >= len(payload):
+                return b""
+            if n < 0:
+                n = len(payload) - self._offset
+            end = min(self._offset + min(n, chunk_size), len(payload))
+            chunk = payload[self._offset:end]
+            self._offset = end
+            return chunk
 
     return FakeStdout()
 
@@ -178,6 +187,85 @@ async def test_handles_invalid_json():
 
     # Should not crash, just log warnings
     on_message.assert_not_called()
+    await bridge.stop()
+
+
+@pytest.mark.asyncio
+async def test_handles_oversized_stdout_line_without_crash():
+    on_message = AsyncMock()
+    bridge = BaileysBridge("/path/to/bridge.js")
+    huge_line = "x" * 100_000
+
+    with patch("asyncio.create_subprocess_exec") as mock_exec:
+        proc = FakeProcess()
+        proc.stdout = make_stdout_reader([huge_line])
+        mock_exec.return_value = proc
+
+        await bridge.start(on_message)
+        await asyncio.sleep(0.05)
+
+    # Oversized non-JSON output should be ignored safely.
+    on_message.assert_not_called()
+    await bridge.stop()
+
+
+@pytest.mark.asyncio
+async def test_recoverable_disconnect_logs_info(caplog):
+    on_message = AsyncMock()
+    bridge = BaileysBridge("/path/to/bridge.js")
+    disconnect_msg = json.dumps(
+        {
+            "type": "disconnected",
+            "reason": "Stream Errored (restart required)",
+            "statusCode": 515,
+            "disconnectReason": "restartRequired",
+            "shouldReconnect": True,
+        }
+    )
+
+    with patch("asyncio.create_subprocess_exec") as mock_exec:
+        proc = FakeProcess()
+        proc.stdout = make_stdout_reader([disconnect_msg])
+        mock_exec.return_value = proc
+        with caplog.at_level(logging.INFO):
+            await bridge.start(on_message)
+            await asyncio.sleep(0.05)
+
+    assert any(
+        "recoverable" in record.message
+        for record in caplog.records
+        if record.levelname == "INFO"
+    )
+    await bridge.stop()
+
+
+@pytest.mark.asyncio
+async def test_non_recoverable_disconnect_logs_warning(caplog):
+    on_message = AsyncMock()
+    bridge = BaileysBridge("/path/to/bridge.js")
+    disconnect_msg = json.dumps(
+        {
+            "type": "disconnected",
+            "reason": "Logged out",
+            "statusCode": 401,
+            "disconnectReason": "loggedOut",
+            "shouldReconnect": False,
+        }
+    )
+
+    with patch("asyncio.create_subprocess_exec") as mock_exec:
+        proc = FakeProcess()
+        proc.stdout = make_stdout_reader([disconnect_msg])
+        mock_exec.return_value = proc
+        with caplog.at_level(logging.WARNING):
+            await bridge.start(on_message)
+            await asyncio.sleep(0.05)
+
+    assert any(
+        "non-recoverable" in record.message
+        for record in caplog.records
+        if record.levelname == "WARNING"
+    )
     await bridge.stop()
 
 

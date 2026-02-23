@@ -56,7 +56,14 @@ uv run openhydra doctor --strict
 
 # Start web server + enabled channels
 uv run openhydra serve
+
+# Or use the convenient shell launcher (see below)
+hydra
 ```
+
+**💡 Pro Tip:** Install the shell launcher for easier server management:
+
+The `hydra` shell alias provides smart server management with automatic startup, health checks, and browser opening. See [Shell Launcher](#shell-launcher-hydra-alias) section below for setup.
 
 ### Path D: Docker API Service (embed in your product)
 
@@ -456,6 +463,169 @@ Workflow controls:
 - `openhydra pause <workflow_id>`
 - `openhydra resume <workflow_id>`
 - `openhydra cancel <workflow_id>`
+
+## Shell Launcher (hydra alias)
+
+For easier server management, OpenHydra includes a smart shell launcher that handles server lifecycle, health checks, and browser opening automatically.
+
+### Quick Start
+
+Install the shell launcher:
+
+```bash
+# Download and install (one-time setup)
+mkdir -p ~/.openhydra
+curl -o ~/.openhydra/aliases.sh https://raw.githubusercontent.com/mercurialsolo/openhydra/main/scripts/aliases.sh
+
+# Add to your shell RC file
+echo '[ -f "$HOME/.openhydra/aliases.sh" ] && source "$HOME/.openhydra/aliases.sh"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Or if you have the repo locally:
+
+```bash
+# Copy from repo
+cp scripts/aliases.sh ~/.openhydra/aliases.sh
+
+# Add to shell
+echo '[ -f "$HOME/.openhydra/aliases.sh" ] && source "$HOME/.openhydra/aliases.sh"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+### Available Commands
+
+Once installed, you have these commands available:
+
+| Command | Description |
+|---------|-------------|
+| `hydra` | Start server (if needed) and open web UI |
+| `hydra-status` | Check if server is running |
+| `hydra-stop` | Stop the server |
+| `hydra-restart` | Restart the server |
+| `hydra-logs` | Show last 50 log lines |
+| `hydra-logs -f` | Follow logs in real-time |
+
+### How It Works
+
+The `hydra` command is smart about server state:
+
+1. **Checks** if server is already running via `/api/v1/health` endpoint
+2. **Starts** server in background if not running (detached process)
+3. **Waits** for health check to pass (up to 60 seconds)
+4. **Opens** web UI in your default browser
+5. **Tracks** process ID in `~/.openhydra/server.pid`
+
+**Idempotency:** Running `hydra` multiple times is safe - it detects an existing server and just opens the browser instead of starting duplicates.
+
+### Configuration
+
+Customize via environment variables:
+
+```bash
+# Use custom port
+OPENHYDRA_WEB_PORT=8080 hydra
+
+# Use custom host
+OPENHYDRA_WEB_HOST=0.0.0.0 hydra
+
+# Make permanent
+export OPENHYDRA_WEB_PORT=8080
+export OPENHYDRA_WEB_HOST=0.0.0.0
+```
+
+### Daily Usage Examples
+
+```bash
+# Start and use OpenHydra
+hydra                    # Opens browser automatically
+
+# Check if running
+hydra-status
+
+# View what's happening
+hydra-logs
+hydra-logs -f           # Follow in real-time (Ctrl+C to exit)
+
+# Stop when done
+hydra-stop
+
+# Restart after config changes
+hydra-restart
+```
+
+### Files Managed
+
+- `~/.openhydra/server.pid` - Running server process ID
+- `~/.openhydra/server.log` - Server output logs
+- `~/.openhydra/openhydra.yaml` - Main configuration file
+
+### Troubleshooting
+
+**Server won't start:**
+```bash
+# Check logs
+hydra-logs
+
+# Ensure dependencies installed
+cd /path/to/openhydra
+uv pip install -e ".[all]"
+
+# Try manual start to see errors
+uv run openhydra serve
+```
+
+**Port already in use:**
+```bash
+# Find what's using the port
+lsof -i :7070
+
+# Stop it
+hydra-stop
+
+# Or kill manually
+kill -9 $(lsof -ti :7070)
+```
+
+**Duplicate processes:**
+```bash
+# Stop all instances
+hydra-stop
+
+# Verify none remain
+ps aux | grep "openhydra serve"
+
+# Kill stragglers
+pkill -f "openhydra serve"
+
+# Start fresh
+hydra
+```
+
+### Testing
+
+A comprehensive end-to-end test report is available:
+
+**File:** [HYDRA_ALIAS_TEST_REPORT.md](/HYDRA_ALIAS_TEST_REPORT.md)
+
+**Tests covered:**
+- ✅ Fresh server start from clean state
+- ✅ Health endpoint validation
+- ✅ Server status checking
+- ✅ Idempotency (no duplicate processes)
+- ✅ PID file tracking
+- ✅ Log file management
+- ✅ Clean shutdown
+
+All tests passing. Production ready. ✅
+
+### Full Documentation
+
+Complete documentation with examples and troubleshooting:
+
+**File:** `~/.openhydra/README.md` (created during installation)
+
+Or view online in the repo: [scripts/README.md](scripts/README.md)
 
 ## Troubleshooting Quick Checks
 

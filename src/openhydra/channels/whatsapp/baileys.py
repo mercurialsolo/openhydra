@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class BaileysBridge:
     """Subprocess bridge to Baileys Node.js WhatsApp Web library."""
+    _MAX_STDOUT_BUFFER_BYTES = 1024 * 1024
 
     def __init__(
         self,
@@ -98,11 +99,33 @@ class BaileysBridge:
         if not self._process or not self._process.stdout:
             return
         try:
+            buffer = bytearray()
             while True:
-                line = await self._process.stdout.readline()
-                if not line:
+                chunk = await self._process.stdout.read(4096)
+                if not chunk:
+                    if buffer:
+                        await self._handle_line(buffer.decode(errors="ignore").strip())
                     break
-                await self._handle_line(line.decode().strip())
+
+                buffer.extend(chunk)
+
+                while True:
+                    newline_idx = buffer.find(b"\n")
+                    if newline_idx == -1:
+                        if len(buffer) > self._MAX_STDOUT_BUFFER_BYTES:
+                            preview = buffer[:120].decode(errors="ignore")
+                            logger.warning(
+                                "Dropping oversized bridge stdout line (%d bytes): %s",
+                                len(buffer),
+                                preview,
+                            )
+                            buffer.clear()
+                        break
+
+                    line = buffer[:newline_idx].decode(errors="ignore").strip()
+                    del buffer[:newline_idx + 1]
+                    if line:
+                        await self._handle_line(line)
         except asyncio.CancelledError:
             return
         except Exception:
@@ -115,7 +138,7 @@ class BaileysBridge:
         try:
             msg: dict[str, Any] = json.loads(line)
         except json.JSONDecodeError:
-            logger.warning("Invalid JSON from bridge: %s", line[:100])
+            logger.debug("Ignoring non-JSON bridge output: %s", line[:100])
             return
 
         msg_type = msg.get("type", "")
@@ -133,10 +156,39 @@ class BaileysBridge:
             self._connected.set()
             logger.info("Baileys bridge connected to WhatsApp")
 
+        elif msg_type == "reconnecting":
+            attempt = int(msg.get("attempt") or 0)
+            delay_ms = int(msg.get("delayMs") or 0)
+            status_code = msg.get("statusCode")
+            detail = f"status_code={status_code}" if status_code is not None else "unknown status"
+            logger.info(
+                "Baileys bridge reconnecting (attempt=%d, delay=%dms, %s)",
+                attempt,
+                delay_ms,
+                detail,
+            )
+
         elif msg_type == "disconnected":
             self._connected.clear()
             reason = msg.get("reason", "unknown")
-            logger.warning("Baileys bridge disconnected: %s", reason)
+            should_reconnect = bool(msg.get("shouldReconnect"))
+            status_code = msg.get("statusCode")
+            reason_name = msg.get("disconnectReason")
+            details = (
+                f"{reason} (status={status_code}, reason={reason_name})"
+                if status_code is not None
+                else reason
+            )
+            if should_reconnect:
+                logger.info(
+                    "Baileys bridge disconnected (recoverable): %s. Waiting for auto-reconnect.",
+                    details,
+                )
+            else:
+                logger.warning(
+                    "Baileys bridge disconnected (non-recoverable): %s",
+                    details,
+                )
 
     def _node_modules_dir(self) -> Path:
         """Resolve where OpenHydra stores Node dependencies for the bridge."""

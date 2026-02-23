@@ -85,6 +85,53 @@ plugins:
 
 In managed mode, the plugin starts `openhydra serve`, waits for health readiness, reads the API key, and connects to the event stream.
 
+## Shell Launcher (`hydra` alias)
+
+OpenHydra provides a smart shell launcher that simplifies server management:
+
+```bash
+# One-time setup (already done if you ran onboard/init)
+source ~/.openhydra/aliases.sh
+
+# Start server and open web UI
+hydra
+
+# Check status
+hydra-status
+
+# View logs
+hydra-logs       # last 50 lines
+hydra-logs -f    # follow mode
+
+# Stop server
+hydra-stop
+
+# Restart
+hydra-restart
+```
+
+The `hydra` command is **idempotent** - it detects existing servers and reuses them instead of creating duplicates.
+
+### Features
+
+- **Smart detection**: Checks `/api/v1/health` before starting
+- **Background execution**: Server survives terminal closure
+- **Cross-platform**: Opens browser on macOS, Linux, Windows
+- **Health polling**: Waits up to 60s for server ready
+- **PID tracking**: Clean shutdown via `hydra-stop`
+
+### Configuration
+
+```bash
+# Custom port
+OPENHYDRA_WEB_PORT=8080 hydra
+
+# Custom host (bind to all interfaces)
+OPENHYDRA_WEB_HOST=0.0.0.0 hydra
+```
+
+For comprehensive testing documentation and troubleshooting, see [HYDRA_ALIAS_TESTING.md](HYDRA_ALIAS_TESTING.md).
+
 ## API Embedding (REST/WebSocket)
 
 Run OpenHydra as a backend service:
