@@ -1,4 +1,4 @@
-"""CLI entry point: python -m bench.hydrabench.runner"""
+"""CLI entry point: python -m bench.hydrabench"""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ def main() -> None:
         "--frameworks",
         nargs="+",
         default=["openhydra", "langgraph", "crewai", "bare"],
-        choices=["openhydra", "langgraph", "crewai", "bare"],
-        help="Frameworks to benchmark (default: all)",
+        help="Frameworks to benchmark: openhydra, langgraph, crewai, bare, or module:Class "
+             "for your own FrameworkAdapter on PYTHONPATH (default: all four built-ins)",
     )
     parser.add_argument(
         "--runs", type=int, default=5,
@@ -45,21 +45,9 @@ def main() -> None:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
 
-    # Build adapters
-    adapters = []
-    for fw in args.frameworks:
-        if fw == "openhydra":
-            from .frameworks.openhydra_adapter import OpenHydraAdapter
-            adapters.append(OpenHydraAdapter())
-        elif fw == "langgraph":
-            from .frameworks.langgraph_adapter import LangGraphAdapter
-            adapters.append(LangGraphAdapter())
-        elif fw == "crewai":
-            from .frameworks.crewai_adapter import CrewAIAdapter
-            adapters.append(CrewAIAdapter())
-        elif fw == "bare":
-            from .frameworks.bare_agent_adapter import BareAgentAdapter
-            adapters.append(BareAgentAdapter())
+    # Build adapters: built-in names or module:Class
+    from .frameworks.registry import resolve_adapter
+    adapters = [resolve_adapter(fw) for fw in args.frameworks]
 
     # Parse claims
     from .config import Claim

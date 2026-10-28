@@ -59,12 +59,37 @@ Full account of each pass and every scenario: the talk record in the coach repo,
 ```
 python -m bench.hydrabench [options]
 
-  --frameworks    Space-separated list (default: all four)
+  --frameworks    openhydra langgraph crewai bare, or module:Class for your own adapter (default: all four)
   --runs N        Runs per scenario (default: 5)
   --claims        Filter to specific claims
-  --output        Output format: json (default), html
+  --output PATH   Where to write the results JSON (default: bench/results/latest.json)
   --verbose       Print per-scenario details
 ```
+
+## Run it on your own infrastructure
+
+Copy `frameworks/openhydra_adapter.py`, point its fourteen methods at your primitives, and declare
+the nine `FrameworkCapabilities` flags honestly (a missing primitive scores 0, "no equivalent").
+Then:
+
+```bash
+PYTHONPATH=. python -m bench.hydrabench --frameworks mypkg.adapter:MyAdapter --runs 5 --output mine.json
+```
+
+Make the kill real: `kill_workflow` must end the process, or discard the engine over the kept
+database, while a step is mid-flight. If every probe lands after the workflow has finished, a 100 on
+crash recovery is vacuous (that is what v1 scored on 2026-10-27).
+
+## Share a run anonymously
+
+```bash
+python -m bench.hydrabench.submit mine.json      # codename, scores and timings only
+python -m bench.hydrabench.submit --table        # every community row, one column per claim
+```
+
+`submit` replaces the framework name with a two-word codename, drops the free-text notes, keeps the
+date only, and writes `results/community/<codename>-<date>.json`. Commit that file and open a pull
+request from any GitHub account. See `results/community/README.md`.
 
 ## Directory structure
 
@@ -76,6 +101,7 @@ bench/
     config.py             # Scenarios, claims, weights
     metrics.py            # Aggregation + statistics
     runner.py             # Orchestrator
+    submit.py             # anonymize a run, print the community table
     generate_results.py   # Standalone deterministic generator
     scenarios/
       crash_recovery.py
@@ -85,6 +111,7 @@ bench/
       cost_control.py
     frameworks/
       base.py             # FrameworkAdapter ABC
+      registry.py         # built-in names or module:Class
       openhydra_adapter.py
       langgraph_adapter.py
       crewai_adapter.py
@@ -97,6 +124,7 @@ bench/
     workflow_plans.yaml
   results/
     latest.json
+    community/          # anonymized submissions
 ```
 
 ## Design decisions
