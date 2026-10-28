@@ -64,7 +64,9 @@ def _chain(n: int) -> list[Step]:
     return steps
 
 
-async def _crash_mid_step(db: Database, roles: RoleCatalog, n: int = 4) -> tuple[str, WorkflowEngine]:
+async def _crash_mid_step(
+    db: Database, roles: RoleCatalog, n: int = 4,
+) -> tuple[str, WorkflowEngine]:
     """Run a chain, kill it inside step 1, return (workflow id, dead engine)."""
     executor = SlowExecutor()
     engine = _engine(db, roles, executor)
@@ -83,7 +85,9 @@ async def _crash_mid_step(db: Database, roles: RoleCatalog, n: int = 4) -> tuple
     return wf_id, engine
 
 
-async def test_crash_leaves_running_step_and_resume_refuses(db: Database, roles: RoleCatalog) -> None:
+async def test_crash_leaves_running_step_and_resume_refuses(
+    db: Database, roles: RoleCatalog,
+) -> None:
     """The state a crash leaves behind, and why the old path cannot take it."""
     wf_id, _dead = await _crash_mid_step(db, roles)
     fresh = _engine(db, roles, SlowExecutor())
@@ -96,7 +100,9 @@ async def test_crash_leaves_running_step_and_resume_refuses(db: Database, roles:
         await fresh.resume_workflow(wf_id)
 
 
-async def test_recover_requeues_running_step_and_completes(db: Database, roles: RoleCatalog) -> None:
+async def test_recover_requeues_running_step_and_completes(
+    db: Database, roles: RoleCatalog,
+) -> None:
     wf_id, _dead = await _crash_mid_step(db, roles)
     executor = SlowExecutor()
     fresh = _engine(db, roles, executor)
