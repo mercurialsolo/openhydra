@@ -54,10 +54,10 @@ jobs:
         run: uv pip install -e ".[all]" pytest pytest-asyncio ruff
 
       - name: Lint
-        run: uv run ruff check src/ tests/
+        run: uv run --no-sync ruff check src/ tests/
 
       - name: Test
-        run: uv run pytest
+        run: uv run --no-sync pytest
 
   package-build:
     needs: secret-scan
