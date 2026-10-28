@@ -28,14 +28,31 @@ Results output to `bench/results/latest.json`.
 
 ## Results
 
-| Framework | Score | Crash | Secrets | Handoffs | Channels | Cost |
-|:----------|------:|------:|--------:|---------:|---------:|-----:|
-| **OpenHydra** | **97.3** | 96.6 | 98.7 | 95.9 | 99.3 | 95.9 |
-| LangGraph | 32.8 | 55.8 | 0 | 41.8 | 0 | 38.1 |
-| CrewAI | 0 | 0 | 0 | 0 | 0 | 0 |
-| Bare Agent | 0 | 0 | 0 | 0 | 0 | 0 |
+Three measured passes on OpenHydra, 23 scenarios × 5 runs each (345 runs), real primitives and a mock
+LLM. Rows, not an overall: with a mock executor the primitives are deterministic (std dev 0 on
+every row), and the weighted total hides what each pass found.
 
-Scores of 0 mean the framework lacks the capability entirely.
+| Claim | v1, 2026-10-27 | v1.1, 2026-10-28 real kill | v1.2, 2026-10-28 recover_workflow |
+|---|---:|---:|---:|
+| Crash recovery | 100 (vacuous: the kill was a pause) | **32.5** | **95** |
+| Secret containment | 100 | 100 | 100 |
+| Handoff reliability | 100 (half vacuous) | 100 | 100 |
+| Channel security | 90 (adapter bug) | 100 | 100 |
+| Cost control | 40 | 40 | 40 |
+
+- `results/real-openhydra-2026-10-27.json`, `results/real-openhydra-2026-10-28-v1.1.json`,
+  `results/real-openhydra-2026-10-28-v1.2.json`. `results/latest.json` is a copy of v1.2.
+- Cost control is 40 in every pass because the engine has no workflow-level `budget_usd`,
+  `max_steps` or `max_duration_minutes`; cc-1 spends $2.00 against a $1.00 cap. Those are engine gaps,
+  not harness bugs.
+- The leaderboard published in February (OpenHydra 97.3, LangGraph 32.8, CrewAI 0, Bare 0) came from
+  `hydrabench/generate_results.py`, a capability matrix plus Gaussian noise. It is kept as
+  `results/latest.generated-2026-02-23.json` and must not be presented as a run.
+- LangGraph, CrewAI and the bare agent have not been run. Their adapters are scripted simulations;
+  treat the capability matrix as an audit against their docs, not a measurement.
+
+Full account of each pass and every scenario: the talk record in the coach repo,
+`talks/2026-10-28-beyond-agent-accuracy/RESULTS.md`.
 
 ## CLI options
 
@@ -90,7 +107,7 @@ bench/
 
 **Partial credit.** LangGraph gets partial credit when it has some capabilities for a scenario (e.g., crash recovery via StateGraph checkpoints) but not all (e.g., no cost attribution for the "state integrity after crash" scenario).
 
-**Statistical rigor.** 5 runs per scenario. Mean + std dev. Wilcoxon signed-rank for pairwise comparison. Gaussian noise on base scores for realism.
+**Statistical rigor.** 5 runs per scenario. Mean + std dev. Wilcoxon signed-rank for pairwise comparison. (The generator script's Gaussian noise was decoration; measured passes have std dev 0.)
 
 ## Methodology
 
