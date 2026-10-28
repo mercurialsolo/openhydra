@@ -597,6 +597,52 @@ class WorkflowEngine:
         task = asyncio.create_task(self.execute_workflow(workflow_id))
         return task
 
+    async def recover_workflow(self, workflow_id: str) -> asyncio.Task:
+        """Recover a workflow whose executing process died.
+
+        A crash leaves the row EXECUTING (or PAUSED) with steps still RUNNING
+        and no output: the process that ran them is gone. Those steps are
+        re-queued as PENDING (their output was never written, so nothing but
+        the in-flight work is lost), the workflow is marked PAUSED by
+        "recovery", and the normal resume path takes it from there.
+
+        Refuses while this engine holds a live pause flag for the workflow:
+        then the executor is alive in this process and re-queueing would
+        duplicate steps that are in flight. Added 2026-10-28 after the first
+        HydraBench run with real kills (cr-1..3) showed the engine left a
+        killed workflow EXECUTING forever and ``resume_workflow`` refused it.
+        """
+        if workflow_id in self._pause_flags:
+            raise ValueError(
+                f"Workflow '{workflow_id}' is executing in this process; nothing to recover"
+            )
+        wf = await self.get_workflow(workflow_id)
+        status = wf["status"]
+        if status not in (WorkflowStatus.EXECUTING.value, WorkflowStatus.PAUSED.value):
+            raise ValueError(
+                f"Cannot recover workflow in '{status}' state (must be executing or paused)"
+            )
+
+        now = datetime.now(timezone.utc).isoformat()
+        cursor = await self._db.conn.execute(
+            "UPDATE steps SET status = ?, started_at = NULL "
+            "WHERE workflow_id = ? AND status = ?",
+            (StepStatus.PENDING.value, workflow_id, StepStatus.RUNNING.value),
+        )
+        requeued = cursor.rowcount if cursor.rowcount is not None else 0
+        await self._db.conn.execute(
+            "UPDATE workflows SET status = ?, paused_at = ?, paused_by = ?, updated_at = ? "
+            "WHERE id = ?",
+            (WorkflowStatus.PAUSED.value, now, "recovery", now, workflow_id),
+        )
+        await self._db.conn.commit()
+        await self._events.emit(Event(
+            type=WORKFLOW_PAUSED,
+            data={"workflow_id": workflow_id, "paused_by": "recovery",
+                  "requeued_steps": requeued},
+        ))
+        return await self.resume_workflow(workflow_id)
+
     async def cancel_workflow(self, workflow_id: str) -> None:
         """Cancel a workflow. Running steps finish, pending steps are skipped."""
         wf = await self.get_workflow(workflow_id)
@@ -631,7 +677,14 @@ class WorkflowEngine:
         )
         ctx: dict[str, Any] = {}
         if wf_cfg:
-            for k in ("session_key", "channel", "user_id", "user_name"):
+            for k in (
+                "session_key",
+                "channel",
+                "user_id",
+                "user_name",
+                "project_id",
+                "conversation_id",
+            ):
                 v = wf_cfg.get(k)
                 if v:
                     ctx[k] = v
@@ -717,6 +770,10 @@ class WorkflowEngine:
                 ctx["user_id"] = wf_cfg.get("user_id")
             if "user_name" in wf_cfg:
                 ctx["user_name"] = wf_cfg.get("user_name")
+            if "project_id" in wf_cfg:
+                ctx["project_id"] = wf_cfg.get("project_id")
+            if "conversation_id" in wf_cfg:
+                ctx["conversation_id"] = wf_cfg.get("conversation_id")
 
         if not step.depends_on:
             return ctx
@@ -869,7 +926,14 @@ class WorkflowEngine:
         """
         cfg = self._workflow_configs.get(workflow_id) or {}
         ctx: dict[str, Any] = {}
-        for k in ("session_key", "channel", "user_id", "user_name"):
+        for k in (
+            "session_key",
+            "channel",
+            "user_id",
+            "user_name",
+            "project_id",
+            "conversation_id",
+        ):
             v = cfg.get(k)
             if v:
                 ctx[k] = v

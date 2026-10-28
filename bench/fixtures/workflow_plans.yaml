@@ -1,0 +1,58 @@
+# Workflow plans for benchmark scenarios
+plans:
+  research_pipeline:
+    description: "Multi-step research pipeline (the canonical test)"
+    steps:
+      - role: planner
+        instructions: "Plan research approach for topic"
+      - role: researcher
+        instructions: "Search and collect sources"
+        depends_on: [0]
+      - role: researcher
+        instructions: "Analyze and synthesize findings"
+        depends_on: [1]
+      - role: writer
+        instructions: "Draft summary report"
+        depends_on: [2]
+      - role: reviewer
+        instructions: "Review and quality check"
+        depends_on: [3]
+
+  competitive_analysis:
+    description: "Multi-source competitive analysis"
+    steps:
+      - role: planner
+        instructions: "Identify competitors and data sources"
+      - role: researcher
+        instructions: "Scrape competitor pricing"
+        depends_on: [0]
+      - role: researcher
+        instructions: "Scrape competitor features"
+        depends_on: [0]
+      - role: analyst
+        instructions: "Normalize and compare data"
+        depends_on: [1, 2]
+      - role: writer
+        instructions: "Generate comparison report"
+        depends_on: [3]
+
+  content_pipeline:
+    description: "Content creation with cost-heavy research"
+    steps:
+      - role: researcher
+        instructions: "Deep research on topic"
+      - role: researcher
+        instructions: "Find supporting data"
+        depends_on: [0]
+      - role: writer
+        instructions: "Write first draft"
+        depends_on: [0, 1]
+      - role: reviewer
+        instructions: "Technical review"
+        depends_on: [2]
+      - role: writer
+        instructions: "Revise based on feedback"
+        depends_on: [3]
+      - role: publisher
+        instructions: "Format and publish"
+        depends_on: [4]

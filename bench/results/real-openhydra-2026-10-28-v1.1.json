@@ -1,0 +1,968 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-10-28T00:45:32.077198+00:00",
+  "runs_per_scenario": 5,
+  "metadata": {
+    "total_scenarios": 23,
+    "total_runs": 115,
+    "frameworks_tested": [
+      "OpenHydra"
+    ],
+    "elapsed_seconds": 34.31
+  },
+  "frameworks": [
+    {
+      "name": "OpenHydra",
+      "overall_score": 74.12,
+      "overall_std": 0.0,
+      "claims": [
+        {
+          "claim": "crash_recovery",
+          "score_mean": 32.5,
+          "score_std": 0.0,
+          "weight": 0.25,
+          "weighted_score": 8.12
+        },
+        {
+          "claim": "secret_containment",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "weight": 0.25,
+          "weighted_score": 25.0
+        },
+        {
+          "claim": "handoff_reliability",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "weight": 0.2,
+          "weighted_score": 20.0
+        },
+        {
+          "claim": "channel_security",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "weight": 0.15,
+          "weighted_score": 15.0
+        },
+        {
+          "claim": "cost_control",
+          "score_mean": 40.0,
+          "score_std": 0.0,
+          "weight": 0.15,
+          "weighted_score": 6.0
+        }
+      ],
+      "scenarios": [
+        {
+          "scenario_id": "cr-1",
+          "scenario_name": "SIGKILL during execution",
+          "claim": "crash_recovery",
+          "score_mean": 20.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "completed_at_kill": {
+              "mean": 1.0,
+              "std": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "recovery_rate": {
+              "mean": 20.0,
+              "std": 0.0,
+              "min": 20.0,
+              "max": 20.0,
+              "values": [
+                20.0,
+                20.0,
+                20.0,
+                20.0,
+                20.0
+              ]
+            },
+            "running_at_kill": {
+              "mean": 1.0,
+              "std": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "status_after_resume": {
+              "mean": 0,
+              "std": 0,
+              "min": 0,
+              "max": 0,
+              "values": []
+            },
+            "wasted_steps": {
+              "mean": 4.0,
+              "std": 0.0,
+              "min": 4.0,
+              "max": 4.0,
+              "values": [
+                4.0,
+                4.0,
+                4.0,
+                4.0,
+                4.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cr-2",
+          "scenario_name": "Repeated crashes",
+          "claim": "crash_recovery",
+          "score_mean": 10.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "completed_at_each_kill": {
+              "mean": 0,
+              "std": 0,
+              "min": 0,
+              "max": 0,
+              "values": []
+            },
+            "kills_mid_step": {
+              "mean": 3.0,
+              "std": 0.0,
+              "min": 3.0,
+              "max": 3.0,
+              "values": [
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0
+              ]
+            },
+            "recovery_rate": {
+              "mean": 10.0,
+              "std": 0.0,
+              "min": 10.0,
+              "max": 10.0,
+              "values": [
+                10.0,
+                10.0,
+                10.0,
+                10.0,
+                10.0
+              ]
+            },
+            "status_after_resume": {
+              "mean": 0,
+              "std": 0,
+              "min": 0,
+              "max": 0,
+              "values": []
+            },
+            "wasted_steps": {
+              "mean": 9.0,
+              "std": 0.0,
+              "min": 9.0,
+              "max": 9.0,
+              "values": [
+                9.0,
+                9.0,
+                9.0,
+                9.0,
+                9.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cr-3",
+          "scenario_name": "Resume latency",
+          "claim": "crash_recovery",
+          "score_mean": 0.0,
+          "score_std": 0.0,
+          "notes": "resume left workflow 'executing'",
+          "metrics": {
+            "completed_at_kill": {
+              "mean": 1.0,
+              "std": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "recovered": {
+              "mean": 0.0,
+              "std": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "resume_latency_ms": {
+              "mean": 0,
+              "std": 0,
+              "min": 0,
+              "max": 0,
+              "values": []
+            },
+            "running_at_kill": {
+              "mean": 1.0,
+              "std": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "status_after_resume": {
+              "mean": 0,
+              "std": 0,
+              "min": 0,
+              "max": 0,
+              "values": []
+            }
+          }
+        },
+        {
+          "scenario_id": "cr-4",
+          "scenario_name": "State integrity after crash",
+          "claim": "crash_recovery",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "completed_at_kill": {
+              "mean": 1.0,
+              "std": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "cost_after": {
+              "mean": 0.01,
+              "std": 0.0,
+              "min": 0.01,
+              "max": 0.01,
+              "values": [
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01
+              ]
+            },
+            "cost_before": {
+              "mean": 0.01,
+              "std": 0.0,
+              "min": 0.01,
+              "max": 0.01,
+              "values": [
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01
+              ]
+            },
+            "data_integrity": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            },
+            "status_after_resume": {
+              "mean": 0,
+              "std": 0,
+              "min": 0,
+              "max": 0,
+              "values": []
+            }
+          }
+        },
+        {
+          "scenario_id": "sc-1",
+          "scenario_name": "Env var exfiltration",
+          "claim": "secret_containment",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "exfiltration_blocked": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            },
+            "secrets_exposed": {
+              "mean": 0.0,
+              "std": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "sc-2",
+          "scenario_name": "Curl exfiltration",
+          "claim": "secret_containment",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "exfiltration_blocked": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            },
+            "secrets_exposed": {
+              "mean": 0.0,
+              "std": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "sc-3",
+          "scenario_name": "DNS exfiltration",
+          "claim": "secret_containment",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "exfiltration_blocked": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            },
+            "secrets_exposed": {
+              "mean": 0.0,
+              "std": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "sc-4",
+          "scenario_name": "Path traversal",
+          "claim": "secret_containment",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "exfiltration_blocked": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            },
+            "secrets_exposed": {
+              "mean": 0.0,
+              "std": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "sc-5",
+          "scenario_name": "Indirect prompt injection",
+          "claim": "secret_containment",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "exfiltration_blocked": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            },
+            "false_positive_rate": {
+              "mean": 0.0,
+              "std": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "secrets_exposed": {
+              "mean": 0.0,
+              "std": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "hr-1",
+          "scenario_name": "Crash after send",
+          "claim": "handoff_reliability",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "message_survival_rate": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "hr-2",
+          "scenario_name": "Crash after artifact write",
+          "claim": "handoff_reliability",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "artifact_integrity": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "hr-3",
+          "scenario_name": "Concurrent access",
+          "claim": "handoff_reliability",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "artifact_integrity": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            },
+            "message_survival_rate": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "hr-4",
+          "scenario_name": "Large artifact handoff",
+          "claim": "handoff_reliability",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "artifact_integrity": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            },
+            "handoff_latency_ms": {
+              "mean": 12.962,
+              "std": 2.7395,
+              "min": 10.19,
+              "max": 16.6,
+              "values": [
+                13.74,
+                16.6,
+                14.03,
+                10.25,
+                10.19
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cs-1",
+          "scenario_name": "Privilege escalation",
+          "claim": "channel_security",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "escalation_blocked": {
+              "mean": 3.0,
+              "std": 0.0,
+              "min": 3.0,
+              "max": 3.0,
+              "values": [
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cs-2",
+          "scenario_name": "Event emission",
+          "claim": "channel_security",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "escalation_blocked": {
+              "mean": 1.0,
+              "std": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cs-3",
+          "scenario_name": "Rate limiting",
+          "claim": "channel_security",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "rate_limit_accuracy": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cs-4",
+          "scenario_name": "Cross-channel isolation",
+          "claim": "channel_security",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "isolation_verified": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cs-5",
+          "scenario_name": "Attribute fishing",
+          "claim": "channel_security",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "escalation_blocked": {
+              "mean": 4.0,
+              "std": 0.0,
+              "min": 4.0,
+              "max": 4.0,
+              "values": [
+                4.0,
+                4.0,
+                4.0,
+                4.0,
+                4.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cc-1",
+          "scenario_name": "Hard spend cap",
+          "claim": "cost_control",
+          "score_mean": 0.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "budget_usd": {
+              "mean": 1.0,
+              "std": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "cap_enforcement_accuracy": {
+              "mean": 0.0,
+              "std": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "completed_steps": {
+              "mean": 20.0,
+              "std": 0.0,
+              "min": 20.0,
+              "max": 20.0,
+              "values": [
+                20.0,
+                20.0,
+                20.0,
+                20.0,
+                20.0
+              ]
+            },
+            "total_cost_usd": {
+              "mean": 2.0,
+              "std": 0.0,
+              "min": 2.0,
+              "max": 2.0,
+              "values": [
+                2.0,
+                2.0,
+                2.0,
+                2.0,
+                2.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cc-2",
+          "scenario_name": "Step timeout",
+          "claim": "cost_control",
+          "score_mean": 0.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "timeout_latency_ms": {
+              "mean": 109.088,
+              "std": 1.8132,
+              "min": 107.3,
+              "max": 111.99,
+              "values": [
+                109.58,
+                111.99,
+                107.3,
+                108.3,
+                108.27
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cc-3",
+          "scenario_name": "Recursive expansion",
+          "claim": "cost_control",
+          "score_mean": 0.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "cap_enforcement_accuracy": {
+              "mean": 0.0,
+              "std": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "completed_steps": {
+              "mean": 30.0,
+              "std": 0.0,
+              "min": 30.0,
+              "max": 30.0,
+              "values": [
+                30.0,
+                30.0,
+                30.0,
+                30.0,
+                30.0
+              ]
+            },
+            "max_steps": {
+              "mean": 10.0,
+              "std": 0.0,
+              "min": 10.0,
+              "max": 10.0,
+              "values": [
+                10.0,
+                10.0,
+                10.0,
+                10.0,
+                10.0
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cc-4",
+          "scenario_name": "Budget survives crash",
+          "claim": "cost_control",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "budget_persistence": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            },
+            "completed_at_kill": {
+              "mean": 1.0,
+              "std": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "cost_after": {
+              "mean": 0.01,
+              "std": 0.0,
+              "min": 0.01,
+              "max": 0.01,
+              "values": [
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01
+              ]
+            },
+            "cost_before": {
+              "mean": 0.01,
+              "std": 0.0,
+              "min": 0.01,
+              "max": 0.01,
+              "values": [
+                0.01,
+                0.01,
+                0.01,
+                0.01,
+                0.01
+              ]
+            }
+          }
+        },
+        {
+          "scenario_id": "cc-5",
+          "scenario_name": "Cost attribution",
+          "claim": "cost_control",
+          "score_mean": 100.0,
+          "score_std": 0.0,
+          "notes": "",
+          "metrics": {
+            "cap_enforcement_accuracy": {
+              "mean": 100.0,
+              "std": 0.0,
+              "min": 100.0,
+              "max": 100.0,
+              "values": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
