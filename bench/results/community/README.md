@@ -11,7 +11,7 @@ output is ever in a results file to begin with.
 ## Submit a run
 
 ```bash
-cp bench/hydrabench/frameworks/template_adapter.py mypkg/adapter.py
+cp bench/hydrabench/frameworks/template_adapter.py mypkg/adapter.py   # then rename the class to MyAdapter
 PYTHONPATH=. python -m bench.hydrabench.check mypkg.adapter:MyAdapter          # fix errors and vacuous kills first
 PYTHONPATH=. python -m bench.hydrabench --frameworks mypkg.adapter:MyAdapter --runs 5 --output mine.json
 python -m bench.hydrabench.submit mine.json            # writes bench/results/community/<codename>-<date>.json

@@ -71,7 +71,7 @@ python -m bench.hydrabench [options]
 Three commands, in this order.
 
 ```bash
-cp bench/hydrabench/frameworks/template_adapter.py mypkg/adapter.py   # 14 methods, 9 flags, all False
+cp bench/hydrabench/frameworks/template_adapter.py mypkg/adapter.py   # then rename the class to MyAdapter
 PYTHONPATH=. python -m bench.hydrabench.check mypkg.adapter:MyAdapter   # declared vs observed, one pass
 PYTHONPATH=. python -m bench.hydrabench --frameworks mypkg.adapter:MyAdapter --runs 5 --output mine.json
 ```
