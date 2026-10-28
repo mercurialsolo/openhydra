@@ -1,4 +1,4 @@
-"""Anonymous submission of HydraBench results: strip identity, keep scores, aggregate community rows."""
+"""Anonymous submission of HydraBench results: strip identity, keep scores, aggregate rows."""
 from __future__ import annotations
 
 import json
@@ -6,9 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from bench.hydrabench.submit import anonymize, community_table, write_submission
+from bench.hydrabench.submit import (
+    anonymize,
+    community_table,
+    markdown_table,
+    write_submission,
+)
 
-RESULTS = Path("bench/results/real-openhydra-2026-10-28-v1.2.json")
+RESULTS = (Path(__file__).resolve().parent.parent / "bench" / "results"
+           / "real-openhydra-2026-10-28-v1.2.json")
 
 
 @pytest.fixture
@@ -28,7 +34,8 @@ def test_anonymize_drops_free_text_and_keeps_scores(results):
     fw = out["frameworks"][0]
     assert all("notes" not in s for s in fw["scenarios"])
     assert fw["claims"] == results["frameworks"][0]["claims"]
-    assert [s["score_mean"] for s in fw["scenarios"]] == [s["score_mean"] for s in results["frameworks"][0]["scenarios"]]
+    before = [s["score_mean"] for s in results["frameworks"][0]["scenarios"]]
+    assert [s["score_mean"] for s in fw["scenarios"]] == before
 
 
 def test_anonymize_keeps_only_the_date_of_the_timestamp(results):
@@ -56,3 +63,19 @@ def test_community_table_has_one_row_per_submission_and_a_column_per_claim(resul
     assert [r["codename"] for r in rows] == ["loud-heron", "quiet-otter"]
     assert rows[0]["crash_recovery"] == 95.0
     assert rows[0]["cost_control"] == 40.0
+
+
+def test_a_multi_framework_file_is_refused_unless_one_is_selected(results):
+    first = results["frameworks"][0]
+    two = {**results, "frameworks": [first, {**first, "name": "B"}]}
+    with pytest.raises(ValueError, match="--framework"):
+        anonymize(two, codename="quiet-otter")
+    out = anonymize(two, codename="quiet-otter", framework="B")
+    assert [f["name"] for f in out["frameworks"]] == ["quiet-otter"]
+
+
+def test_markdown_table_has_a_header_and_one_line_per_row(results, tmp_path):
+    write_submission(results, tmp_path, codename="quiet-otter")
+    md = markdown_table(community_table(tmp_path))
+    assert md.splitlines()[0].startswith("| codename |")
+    assert "| quiet-otter |" in md

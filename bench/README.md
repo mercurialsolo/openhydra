@@ -68,28 +68,42 @@ python -m bench.hydrabench [options]
 
 ## Run it on your own infrastructure
 
-Copy `frameworks/openhydra_adapter.py`, point its fourteen methods at your primitives, and declare
-the nine `FrameworkCapabilities` flags honestly (a missing primitive scores 0, "no equivalent").
-Then:
+Three commands, in this order.
 
 ```bash
+cp bench/hydrabench/frameworks/template_adapter.py mypkg/adapter.py   # 14 methods, 9 flags, all False
+PYTHONPATH=. python -m bench.hydrabench.check mypkg.adapter:MyAdapter   # declared vs observed, one pass
 PYTHONPATH=. python -m bench.hydrabench --frameworks mypkg.adapter:MyAdapter --runs 5 --output mine.json
 ```
 
+`template_adapter.py` is the file to copy: every method is wired, no capability is claimed, and
+its docstring says which scenarios call which method. Point the methods at your primitives and flip
+a flag only when the methods behind it are real; a missing primitive scores 0, "no equivalent".
+`module:Class` is any importable path on `PYTHONPATH`; nothing in this repo needs editing.
+
+`check` runs one pass over all 23 scenarios and prints the flags you declared next to the score you
+got. It warns when a crash-recovery kill landed after the workflow had finished (that score is not a
+measurement) and fails when a scenario raised (an error is scored 0 and `submit` drops the
+message, so it would otherwise ship as a clean row of zeros).
+
 Make the kill real: `kill_workflow` must end the process, or discard the engine over the kept
-database, while a step is mid-flight. If every probe lands after the workflow has finished, a 100 on
-crash recovery is vacuous (that is what v1 scored on 2026-10-27).
+database, while a step is mid-flight. v1 of this harness scored 100 on 2026-10-27 because its kill
+was a pause; `check` would have said so.
 
 ## Share a run anonymously
 
 ```bash
-python -m bench.hydrabench.submit mine.json      # codename, scores and timings only
-python -m bench.hydrabench.submit --table        # every community row, one column per claim
+python -m bench.hydrabench.submit mine.json                  # codename, scores and timings only
+git add bench/results/community/ && git commit -m "HydraBench: community submission"
+python -m bench.hydrabench.submit --table [--markdown]       # every row, one column per claim
 ```
 
-`submit` replaces the framework name with a two-word codename, drops the free-text notes, keeps the
-date only, and writes `results/community/<codename>-<date>.json`. Commit that file and open a pull
-request from any GitHub account. See `results/community/README.md`.
+`submit` keeps one framework per file (pick one with `--framework` from a multi-framework run),
+replaces its name with a two-word codename, drops the free-text notes, keeps the date only, and
+writes `results/community/<codename>-<date>.json`. Open a pull request from any GitHub account; CI
+validates the file (`tests/test_community_submissions.py`). The account is the only identity
+involved, so use a throwaway if that matters. `openhydra-reference-*.json` is our own v1.2 run,
+labelled, not anonymous. See `results/community/README.md`.
 
 ## Directory structure
 
@@ -101,6 +115,7 @@ bench/
     config.py             # Scenarios, claims, weights
     metrics.py            # Aggregation + statistics
     runner.py             # Orchestrator
+    check.py              # declared vs observed, vacuous kills, errors
     submit.py             # anonymize a run, print the community table
     generate_results.py   # Standalone deterministic generator
     scenarios/
@@ -112,6 +127,7 @@ bench/
     frameworks/
       base.py             # FrameworkAdapter ABC
       registry.py         # built-in names or module:Class
+      template_adapter.py # copy this to benchmark your own runtime
       openhydra_adapter.py
       langgraph_adapter.py
       crewai_adapter.py

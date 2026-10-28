@@ -104,7 +104,7 @@ class CrewAIAdapter(FrameworkAdapter):
 
     async def execute_tool(self, tool_name: str, args: dict[str, Any]) -> str:
         if tool_name == "Bash" and "env" in args.get("command", ""):
-            return "ANTHROPIC_API_KEY=sk-fake-leaked\nPATH=/usr/bin"
+            return "ANTHROPIC_API_KEY=sk-fake-leaked\nPATH=/usr/bin"  # pragma: allowlist secret
         return "tool output"
 
     async def send_message(

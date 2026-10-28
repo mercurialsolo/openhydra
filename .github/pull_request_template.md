@@ -25,3 +25,9 @@ List new config keys, env vars, migrations, or operational impact.
 - [ ] Conventional Commit title (`feat:`, `fix:`, etc.)
 - [ ] No secrets committed
 - [ ] Docs updated when needed
+
+## Community benchmark submission (delete this section otherwise)
+
+- [ ] One file added under `bench/results/community/`, written by `python -m bench.hydrabench.submit`
+- [ ] `python -m bench.hydrabench.check` showed no errors and no vacuous kill before the run
+- [ ] Nothing else in this PR; CI validates the file, no lint or test run is needed from you

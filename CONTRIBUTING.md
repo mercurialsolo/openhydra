@@ -25,6 +25,12 @@ uv run openhydra --help
 uv pip install -e ".[all]"
 ```
 
+## Benchmarking your own runtime
+
+HydraBench accepts any `FrameworkAdapter` as `--frameworks module:Class`, and `python -m
+bench.hydrabench.submit` turns a run into an anonymous community row. See `bench/README.md`,
+sections "Run it on your own infrastructure" and "Share a run anonymously".
+
 ## Development Workflow
 
 1. Fork the repo and create a branch from `main`.

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
+
+# The benchmark lives in bench/ beside the package, not inside it; make it importable in CI.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from openhydra.config import EngineConfig, MemoryConfig, OpenHydraConfig
 from openhydra.db import Database

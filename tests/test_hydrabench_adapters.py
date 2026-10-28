@@ -14,7 +14,8 @@ class _Mine(FrameworkAdapter):
     async def setup(self): ...
     async def teardown(self): ...
     async def create_workflow(self, steps, config=None): return "wf"
-    async def execute_workflow(self, workflow_id): return {"status": "completed", "steps": [], "cost_usd": 0.0}
+    async def execute_workflow(self, workflow_id):
+        return {"status": "completed", "steps": [], "cost_usd": 0.0}
     async def kill_workflow(self, workflow_id): ...
     async def resume_workflow(self, workflow_id): return {"status": "completed"}
     async def get_workflow_status(self, workflow_id): return {"status": "completed"}
@@ -47,6 +48,6 @@ def test_a_class_that_is_not_an_adapter_is_refused():
         resolve_adapter(f"{__name__}:_NotAnAdapter")
 
 
-def test_an_unknown_name_names_the_accepted_forms():
+def test_an_unknown_name_names_the_accepted_forms():  # noqa: E501
     with pytest.raises(ValueError, match="module:Class"):
         resolve_adapter("mine")

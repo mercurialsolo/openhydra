@@ -107,7 +107,7 @@ class LangGraphAdapter(FrameworkAdapter):
             cmd = args.get("command", "")
             if "env" in cmd:
                 # Simulates leaking secrets (no native stripping)
-                return "ANTHROPIC_API_KEY=sk-fake-leaked\nPATH=/usr/bin"
+                return "ANTHROPIC_API_KEY=sk-fake-leaked\nPATH=/usr/bin"  # pragma: allowlist secret
             return "command output"
         if tool_name == "Read":
             # No path restriction by default

@@ -101,7 +101,7 @@ class BareAgentAdapter(FrameworkAdapter):
 
     async def execute_tool(self, tool_name: str, args: dict[str, Any]) -> str:
         if tool_name == "Bash" and "env" in args.get("command", ""):
-            return "ANTHROPIC_API_KEY=sk-fake-leaked\nOPENAI_API_KEY=sk-fake\nPATH=/usr/bin"
+            return "ANTHROPIC_API_KEY=sk-fake-leaked\nOPENAI_API_KEY=sk-fake\nPATH=/usr/bin"  # pragma: allowlist secret
         if tool_name == "Read":
             # No path restriction
             return "file contents visible"
